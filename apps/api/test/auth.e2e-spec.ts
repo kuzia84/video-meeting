@@ -108,6 +108,39 @@ describe('Auth (e2e)', () => {
     });
   });
 
+  describe('email normalization & password length', () => {
+    it('normalizes email so login is case-insensitive', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/register')
+        .send({ email: 'Mixed@Example.com', password: 'password123' })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email: 'mixed@example.com', password: 'password123' })
+        .expect(200);
+    });
+
+    it('treats case-variant emails as the same account (409 on duplicate)', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/register')
+        .send({ email: 'Dup@Example.com', password: 'password123' })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post('/auth/register')
+        .send({ email: 'dup@example.com', password: 'password123' })
+        .expect(409);
+    });
+
+    it('rejects a password longer than 72 chars with 400', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/register')
+        .send({ email: 'long@example.com', password: 'a'.repeat(73) })
+        .expect(400);
+    });
+  });
+
   it('issues a token whose payload sub matches the user id', async () => {
     const res = await request(app.getHttpServer())
       .post('/auth/register')
