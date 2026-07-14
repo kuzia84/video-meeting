@@ -5,6 +5,7 @@ import { JwtModule, JwtSignOptions } from '@nestjs/jwt';
 import { AuthController } from './auth.controller';
 import { LoginHandler } from './commands/handlers/login.handler';
 import { RegisterHandler } from './commands/handlers/register.handler';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { TokenService } from './token.service';
 
 @Module({
@@ -28,6 +29,7 @@ import { TokenService } from './token.service';
     }),
   ],
   controllers: [AuthController],
-  providers: [RegisterHandler, LoginHandler, TokenService],
+  providers: [RegisterHandler, LoginHandler, TokenService, JwtAuthGuard],
+  exports: [JwtAuthGuard, JwtModule],
 })
 export class AuthModule {}
