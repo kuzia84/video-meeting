@@ -25,6 +25,9 @@ npm run test          # turbo run test — currently only apps/api has tests
 npm run clean         # turbo run clean
 npm run format        # prettier --write across the whole repo
 npm run format:check
+npm run db:up          # docker compose up -d — starts local Postgres on :5432
+npm run db:down        # docker compose down
+npm run db:logs        # docker compose logs -f postgres
 ```
 
 To scope a command to a single workspace, use npm's `-w` flag or `turbo run <task> --filter=<workspace>`, e.g.:
@@ -49,10 +52,11 @@ npx jest --config ./test/jest-e2e.json   # e2e tests
 - **TypeScript config layering**: `tsconfig.base.json` at the root sets strict-mode defaults (`strict`, `ES2022` target, declaration output). Each workspace's `tsconfig.json` extends it and overrides `module`/`moduleResolution` for its runtime (NestJS uses CommonJS/node resolution; Next.js uses ESNext/bundler resolution).
 - **ESLint config layering**: the root `.eslintrc.js` defines base `@typescript-eslint` rules. `apps/api/.eslintrc.js` and `apps/web/.eslintrc.js` each set `root: true` and extend/override with framework-specific plugins (NestJS + Prettier integration in `api`; `next/core-web-vitals` + `next/typescript` in `web`) rather than inheriting the root config directly.
 - **Single Prettier config**: `.prettierrc` at the root applies repo-wide; there is no per-app Prettier config.
+- **Local Postgres via Docker Compose**: `docker-compose.yml` at the root runs a single `postgres:18-alpine` service (container `video-meetings-postgres`, port `5432` by default). Config is read from `POSTGRES_USER`/`POSTGRES_PASSWORD`/`POSTGRES_DB`/`POSTGRES_PORT` env vars (see `.env.example`), each defaulting to `postgres`/`postgres`/`video_meetings`/`5432` if unset. Data persists in the named volume `postgres_data`. Note: Postgres 18+ images require the volume to be mounted at `/var/lib/postgresql` (not `/var/lib/postgresql/data`) — mounting at the old path causes the container to crash-loop on startup. `apps/api` now connects to it via Prisma (`@prisma/client`/`prisma` pinned to `^6.19.2`, see `apps/api/CLAUDE.md` for the pin rationale) — a `User` table exists (`apps/api/prisma/schema.prisma`), with migrations in `apps/api/prisma/migrations`. Auth (`POST /auth/register`, `POST /auth/login`) is the first consumer.
 
 ## Design docs
 
-`docs/superpowers/specs/2026-07-14-monorepo-design.md` and `docs/superpowers/plans/2026-07-14-monorepo-setup.md` capture the original scaffolding design and rationale (e.g., why the API runs on port 3001, why `shared` has no compiled output). Explicitly out of scope per the design doc: database/ORM, authentication/JWT guards, CI/CD, and Docker/deployment config.
+`docs/superpowers/specs/2026-07-14-monorepo-design.md` and `docs/superpowers/plans/2026-07-14-monorepo-setup.md` capture the original scaffolding design and rationale (e.g., why the API runs on port 3001, why `shared` has no compiled output). Explicitly out of scope per the design doc at the time it was written: database/ORM, authentication/JWT guards, CI/CD. A standalone Postgres via Docker Compose was since added (see Architecture above), and `docs/superpowers/specs/2026-07-14-auth-login-register-design.md` captures the design for the auth module (`apps/api/src/auth/`) that now consumes it.
 
 ## Keeping documentation current
 
