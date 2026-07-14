@@ -17,8 +17,9 @@ npm run start            # node dist/main
 npm run lint             # eslint "{src,test}/**/*.ts"
 npm run lint:fix
 npm run test              # jest (unit tests, *.spec.ts under src/)
-npm run test:e2e           # jest --config ./test/jest-e2e.json (*.e2e-spec.ts under test/)
+npm run test:e2e           # jest --config ./test/jest-e2e.json (*.e2e-spec.ts under test/) — requires Postgres running (`npm run db:up` from repo root)
 npm run clean               # rm -rf dist
+npx prisma migrate dev      # apply/create migrations against the running Postgres
 ```
 
 Run a single test:
@@ -35,6 +36,10 @@ npx jest -t 'should return a healthy response'
 - `tsconfig.json` extends the root `tsconfig.base.json` and adds NestJS-specific compiler options (`emitDecoratorMetadata`, `experimentalDecorators`, CommonJS module resolution). `tsconfig.build.json` extends `tsconfig.json` and additionally excludes `test/` and `*.spec.ts` files from production builds.
 - Jest config lives inline in `package.json` (`rootDir: "src"`, `testRegex: ".*\\.spec\\.ts$"`) for unit tests; e2e tests use the separate `test/jest-e2e.json` config and live under `test/`.
 - `.eslintrc.js` sets `root: true` (does not inherit the repo-root ESLint config) and layers `plugin:prettier/recommended` on top of the `@typescript-eslint/recommended` rules.
+- **Auth (`src/auth/`)**: `AuthModule` registers `AuthController` + `AuthService` and a `JwtModule.registerAsync` configured from `ConfigService` (secret/TTL, see below). `POST /auth/register` (201) and `POST /auth/login` (200, `@HttpCode(200)`) both validate `RegisterUserDto`/`LoginDto` (`class-validator`) and return `ApiResponse<{ accessToken, user: { id, email } }>` from `@video-meetings/shared`, wrapped manually in the controller (`{ success, message, data }`). Passwords are hashed with the native `bcrypt` package (10 rounds); JWT payload is `{ sub, email }`. Errors use Nest's default exception shape: 400 (validation), 401 with the same `'Invalid credentials'` message for both unknown email and wrong password, 409 for a duplicate email on register.
+- **Prisma / database (`src/prisma/`)**: `PrismaModule` is `@Global()` and exports `PrismaService` (extends `PrismaClient`, connects/disconnects on module init/destroy) so any module can inject it without re-importing. The `User` model lives in `prisma/schema.prisma` (`id`, `email` unique, `passwordHash`, `createdAt`); migrations are in `prisma/migrations/` and applied/created with `npx prisma migrate dev`. The local Postgres (`docker-compose.yml` at repo root, `npm run db:up`) must be running for migrations, `dev`, and `test:e2e`.
+- **Config (`main.ts`, `app.module.ts`)**: `ConfigModule.forRoot({ isGlobal: true })` reads `apps/api/.env` (see `.env.example`: `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN` default `1h`). `main.ts` also installs a global `ValidationPipe({ whitelist: true, transform: true })`.
+- **Prisma pinned to `^6.19.2`** (both `prisma` and `@prisma/client`) — deliberate, not stale: Prisma 7.x changes the `datasource`/`env()` schema syntax and requires a `prisma.config.ts` plus a driver adapter, which is incompatible with the current `schema.prisma`/migration setup. Do not let a routine `npm update` bump past 6.x; upgrading to 7 needs its own deliberate migration.
 
 ## Keeping documentation current
 
