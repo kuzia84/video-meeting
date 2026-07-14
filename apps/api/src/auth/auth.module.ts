@@ -1,11 +1,15 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { CqrsModule } from '@nestjs/cqrs';
 import { JwtModule, JwtSignOptions } from '@nestjs/jwt';
 import { AuthController } from './auth.controller';
-import { AuthService } from './auth.service';
+import { LoginHandler } from './commands/handlers/login.handler';
+import { RegisterHandler } from './commands/handlers/register.handler';
+import { TokenService } from './token.service';
 
 @Module({
   imports: [
+    CqrsModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -24,6 +28,6 @@ import { AuthService } from './auth.service';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService],
+  providers: [RegisterHandler, LoginHandler, TokenService],
 })
 export class AuthModule {}
