@@ -1,0 +1,16 @@
+import { Body, Controller, Post } from '@nestjs/common';
+import type { ApiResponse } from '@video-meetings/shared';
+import { AuthService } from './auth.service';
+import { AuthResult } from './auth.types';
+import { RegisterUserDto } from './dto/register-user.dto';
+
+@Controller('auth')
+export class AuthController {
+  constructor(private readonly authService: AuthService) {}
+
+  @Post('register')
+  async register(@Body() dto: RegisterUserDto): Promise<ApiResponse<AuthResult>> {
+    const result = await this.authService.register(dto);
+    return { success: true, message: 'Registered', data: result };
+  }
+}
