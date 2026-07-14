@@ -5,3 +5,8 @@ export interface AuthResult {
     email: string;
   };
 }
+
+export interface AuthUser {
+  userId: string;
+  email: string;
+}
