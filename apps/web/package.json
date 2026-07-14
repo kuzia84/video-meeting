@@ -1,0 +1,28 @@
+{
+  "name": "@video-meetings/web",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "lint:fix": "next lint --fix",
+    "clean": "rm -rf .next"
+  },
+  "dependencies": {
+    "@video-meetings/shared": "*",
+    "next": "^15.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "*",
+    "eslint-config-next": "^15.0.0",
+    "prettier": "*",
+    "typescript": "*"
+  }
+}
