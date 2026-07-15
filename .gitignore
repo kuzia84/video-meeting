@@ -11,6 +11,9 @@ next-env.d.ts
 # Coverage
 coverage
 
+# Playwright MCP snapshot/screenshot artifacts
+.playwright-mcp
+
 # Env
 .env
 .env.local
