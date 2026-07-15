@@ -32,3 +32,17 @@
 [data-theme='dark'] .field-error {
   color: #f87171; /* red-400, 6.40:1 on dark --surface */
 }
+
+/*
+ * Muted secondary text (e.g. the brand tagline) that sits directly on
+ * --background rather than a --surface card. --background is lighter than
+ * --surface in light mode, so the --muted token — tuned for surfaces —
+ * measured 4.43:1 there, just under AA's 4.5:1 for 14px text. Use a
+ * slightly darker gray on light; --muted is fine on dark (7.7:1).
+ */
+.muted-on-background {
+  color: #5b5b64; /* zinc-600-ish: ~5.9:1 on light --background */
+}
+[data-theme='dark'] .muted-on-background {
+  color: var(--muted);
+}

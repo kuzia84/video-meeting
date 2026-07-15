@@ -4,8 +4,8 @@ import { Providers } from './providers';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Video Meetings',
-  description: 'Video meetings application',
+  title: 'MeetingBrain',
+  description: 'Превращаем записи встреч в протоколы, задачи и решения',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
