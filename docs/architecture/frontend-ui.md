@@ -4,7 +4,7 @@ Conventions for building UI in `apps/web` (Next.js 15, App Router, React 19) wit
 
 ## Setup status
 
-Wired up: `apps/web/postcss.config.mjs`, `apps/web/src/app/globals.css` (`@import 'tailwindcss'` then `@import '@heroui/styles'`), `apps/web/src/app/providers.tsx` (`next-themes` `ThemeProvider`, no `HeroUIProvider`), `apps/web/src/app/layout.tsx` (imports `globals.css`, `suppressHydrationWarning`, wraps `children` in `<Providers>`). First real page: `apps/web/src/app/register/` (registration form — see the `validationBehavior` gotcha below, discovered building it).
+Wired up: `apps/web/postcss.config.mjs`, `apps/web/src/app/globals.css` (`@import 'tailwindcss'` then `@import '@heroui/styles'`), `apps/web/src/app/providers.tsx` (`next-themes` `ThemeProvider`, no `HeroUIProvider`), `apps/web/src/app/layout.tsx` (imports `globals.css`, `suppressHydrationWarning`, wraps `children` in `<Providers>`). Pages built on this: `apps/web/src/app/register/` and `apps/web/src/app/login/` (auth forms) and the protected home `apps/web/src/app/page.tsx` → `home-view.tsx`. The register form was first — see the `validationBehavior` gotcha below, discovered building it.
 
 ## HeroUI v3 — critical: not v2
 
