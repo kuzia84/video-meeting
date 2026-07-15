@@ -17,3 +17,12 @@ export async function registerUser(email: string, password: string): Promise<Aut
   assertAuthResult(data);
   return data;
 }
+
+export async function loginUser(email: string, password: string): Promise<AuthResult> {
+  const data = await fetchJson<Partial<AuthResult>>('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+  });
+  assertAuthResult(data);
+  return data;
+}
