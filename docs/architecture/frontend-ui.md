@@ -93,6 +93,39 @@ const [emailError, setEmailError] = useState<string | null>(null);
   <TextField name="email" onChange={() => setEmailError(null)} ...>
 ```
 
+Route the field to blame off `ApiError.field` (set by the API response, e.g. `{ field: "email" }` on the 409), **not off the HTTP status code alone** — `err.status === 409` doesn't generalize to a form with more than one possible conflicting field, since the status code carries no information about which field caused it:
+
+```tsx
+} catch (err) {
+  if (err instanceof ApiError) {
+    if (err.field === 'email') setEmailError(err.messages[0]);
+    else setFormError(err.messages.join(', '));
+  } else if (err instanceof Error) {
+    setFormError(err.message); // client.ts already gives network vs. malformed-response distinct messages
+  }
+}
+```
+
+**Re-entrancy:** `Button isPending` only disables _pointer_ interaction (`pointer-events: none`) — it does not set `disabled`/`aria-disabled`, so it does not stop a second Enter-triggered submit, and a React state guard (`if (isSubmitting) return`) can itself race a rapid double-submit if both invocations read the same pre-commit render's closure. Guard with a `useRef` instead — it updates synchronously, independent of React's render/commit timing:
+
+```tsx
+const isSubmittingRef = useRef(false);
+async function handleSubmit(e) {
+  e.preventDefault();
+  if (isSubmittingRef.current) return;
+  isSubmittingRef.current = true;
+  try {
+    /* ... */
+  } finally {
+    isSubmittingRef.current = false;
+    setSubmitting(false);
+  }
+}
+// <Button isPending={isSubmitting} isDisabled={isSubmitting}>  — isDisabled is defense in depth for pointer input
+```
+
+**Separate "the mutation succeeded but a client-side side-effect failed" from "the request failed."** In `register-form.tsx`, `saveAccessToken` (writes to `sessionStorage`) is called in its own `try/catch` _after_ `registerUser` resolves, not inside the same `try` — a storage write failure (private browsing, quota) is not a "please retry" network error, and lumping it into the same catch tells the user to retry an already-successful registration.
+
 ### Fetching component docs
 
 Always fetch a component's docs before implementing with it — the compound API, props, and anatomy are not guessable. Two ways:
