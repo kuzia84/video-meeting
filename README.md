@@ -78,21 +78,21 @@ npm run dev
 
 **Корень (`.env`)** — читается `docker-compose.yml`:
 
-| Переменная          | По умолчанию     | Назначение            |
-| ------------------- | ---------------- | --------------------- |
-| `POSTGRES_USER`     | `postgres`       | пользователь Postgres |
-| `POSTGRES_PASSWORD` | `postgres`       | пароль Postgres       |
-| `POSTGRES_DB`       | `video_meetings` | имя базы              |
-| `POSTGRES_PORT`     | `5432`           | проброшенный порт     |
+| Переменная          | По умолчанию     | Назначение                                              |
+| ------------------- | ---------------- | ------------------------------------------------------- |
+| `POSTGRES_USER`     | `postgres`       | пользователь Postgres                                   |
+| `POSTGRES_PASSWORD` | — (обязательна)  | пароль Postgres; **без дефолта**, задайте свой в `.env` |
+| `POSTGRES_DB`       | `video_meetings` | имя базы                                                |
+| `POSTGRES_PORT`     | `5432`           | проброшенный порт                                       |
 
 **`apps/api/.env`**:
 
-| Переменная       | По умолчанию                                                   | Назначение                                   |
-| ---------------- | -------------------------------------------------------------- | -------------------------------------------- |
-| `DATABASE_URL`   | `postgresql://postgres:postgres@localhost:5432/video_meetings` | строка подключения Prisma                    |
-| `JWT_SECRET`     | `change-me-in-production`                                      | секрет для подписи JWT (**сменить в проде**) |
-| `JWT_EXPIRES_IN` | `1h`                                                           | срок жизни токена                            |
-| `CORS_ORIGINS`   | `http://localhost:3000`                                        | список разрешённых origin через запятую      |
+| Переменная       | По умолчанию                                                       | Назначение                                               |
+| ---------------- | ------------------------------------------------------------------ | -------------------------------------------------------- |
+| `DATABASE_URL`   | `postgresql://postgres:<ваш-пароль>@localhost:5432/video_meetings` | строка подключения Prisma (пароль = `POSTGRES_PASSWORD`) |
+| `JWT_SECRET`     | `change-me-in-production`                                          | секрет для подписи JWT (**сменить в проде**)             |
+| `JWT_EXPIRES_IN` | `1h`                                                               | срок жизни токена                                        |
+| `CORS_ORIGINS`   | `http://localhost:3000`                                            | список разрешённых origin через запятую                  |
 
 **`apps/web/.env`**:
 

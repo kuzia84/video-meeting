@@ -5,7 +5,10 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      # No hardcoded default — the password must be supplied via .env so no
+      # credential value lives in this tracked file. `:?` makes `docker compose`
+      # fail with a clear message if it is unset.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your .env}
       POSTGRES_DB: ${POSTGRES_DB:-video_meetings}
     ports:
       - '${POSTGRES_PORT:-5432}:5432'
