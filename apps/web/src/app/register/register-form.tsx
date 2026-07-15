@@ -85,7 +85,10 @@ export function RegisterForm() {
         onSubmit={handleSubmit}
       >
         {formError ? (
-          <Alert status="danger">
+          // HeroUI's Alert has no built-in role/aria-live — without this it
+          // never gets announced to screen reader users when it appears
+          // asynchronously after submit.
+          <Alert status="danger" role="alert" aria-live="assertive">
             <Alert.Indicator />
             <Alert.Content>
               <Alert.Description>{formError}</Alert.Description>
@@ -104,7 +107,7 @@ export function RegisterForm() {
           }}
         >
           <Label>Email</Label>
-          <Input placeholder="you@example.com" />
+          <Input className="h-11 md:h-10" placeholder="you@example.com" />
           <FieldError />
         </TextField>
 
@@ -122,12 +125,12 @@ export function RegisterForm() {
           }}
         >
           <Label>Пароль</Label>
-          <Input placeholder="Минимум 8 символов" />
+          <Input className="h-11 md:h-10" placeholder="Минимум 8 символов" />
           <Description>Минимум 8 символов</Description>
           <FieldError />
         </TextField>
 
-        <Button type="submit" isPending={isSubmitting} isDisabled={isSubmitting}>
+        <Button type="submit" size="lg" isPending={isSubmitting} isDisabled={isSubmitting}>
           {({ isPending }) => (isPending ? 'Регистрация…' : 'Зарегистрироваться')}
         </Button>
       </Form>

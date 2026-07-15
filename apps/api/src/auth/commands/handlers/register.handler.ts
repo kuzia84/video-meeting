@@ -36,7 +36,7 @@ export class RegisterHandler implements ICommandHandler<RegisterCommand, AuthRes
         throw new ConflictException({
           statusCode: 409,
           error: 'Conflict',
-          message: 'Email already registered',
+          message: 'Этот email уже зарегистрирован',
           field: 'email',
         });
       }

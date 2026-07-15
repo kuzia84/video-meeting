@@ -49,19 +49,23 @@ import { Card } from '@heroui/react';
    ```
 3. `src/app/layout.tsx` — import `globals.css`, add `suppressHydrationWarning` on `<html>` (required for theme switching to avoid a hydration mismatch warning), apply `bg-background text-foreground` on `<body>`. No `HeroUIProvider`.
 4. Light/dark theme uses `next-themes`, not a HeroUI provider — wrap the app in a client `Providers` component:
+
    ```tsx
    // src/app/providers.tsx
    'use client';
    import { ThemeProvider } from 'next-themes';
    export function Providers({ children }: { children: React.ReactNode }) {
      return (
-       <ThemeProvider attribute="class" defaultTheme="light">
+       <ThemeProvider attribute={['class', 'data-theme']} defaultTheme="light">
          {children}
        </ThemeProvider>
      );
    }
    ```
-   Toggle with `useTheme()` from `next-themes` (`const { theme, setTheme } = useTheme()`), never by hand-editing `document.documentElement.className`.
+
+   **`attribute` must include `'data-theme'`, not just `'class'`.** `@heroui/styles`' shipped CSS keys its dark-mode variables off `[data-theme="dark"]` — verified by reading the generated theme CSS (`get_theme.mjs`), where the dark block is literally `[data-theme='dark'] { ... }`, not `.dark { ... }`. `attribute="class"` alone (the form shown in HeroUI's own basic theming example, and what this doc originally documented) means `next-themes` only ever sets `class="dark"`; HeroUI's CSS never matches that selector, so **no dark tokens apply at all** — confirmed live: manually forcing only the class left every color at its light-mode value, while setting `data-theme="dark"` (via `next-themes`' array form, or by hand) correctly switched them. Toggle with `useTheme()` from `next-themes` (`const { theme, setTheme } = useTheme()`), never by hand-editing `document.documentElement.className`.
+
+   **Testing dark mode with Playwright MCP:** don't just set `document.documentElement.classList.add('dark')` via `browser_evaluate` — that masks exactly the bug above (the class alone does nothing; you must also verify `data-theme` actually gets set by the real mechanism). Prefer `localStorage.setItem('theme', 'dark')` (next-themes' default storage key) followed by `browser_navigate` to the same URL — this exercises next-themes' actual init script, the same path a real user's toggle takes.
 
 ### Component conventions
 
@@ -69,6 +73,8 @@ import { Card } from '@heroui/react';
 - **`onPress`, not `onClick`**, for interactive elements — HeroUI is built on React Aria and `onPress` gives correct keyboard/touch/screen-reader behavior that `onClick` doesn't.
 - **Semantic variants** (`primary`, `secondary`, `tertiary`, `danger`, `ghost`, `outline`), never raw colors/Tailwind color utilities on HeroUI components — semantic variants adapt to the active theme.
 - **Theme via CSS variables** (`oklch` color space), e.g. `--accent`, `--accent-foreground` (no-suffix = background, `-foreground` = text on that background). Override in `globals.css` under `:root`, don't hardcode colors in components.
+- **Verify contrast against `--surface`, don't assume HeroUI's defaults clear WCAG AA.** Measured on the register page: `--field-border` (`transparent`, relying on `--field-shadow` instead) leaves inputs with **zero visible boundary in dark mode** where `--field-background` happens to equal `--surface` (1:1 contrast) — `globals.css` now sets an explicit `--field-border: #71717a` (verified ≥3:1 against `--surface` in both themes; the semantic `--border` token is too subtle on its own, ~1.3:1, since it's designed to pair with the shadow, not replace it). Likewise `.field-error`'s `text-danger` measured 3.57–3.97:1 at its 12px size — under the 4.5:1 AA floor for that size — and is overridden with theme-specific reds (`#b91c1c` light / `#f87171` dark) scoped to `.field-error` only, not the shared `--danger` token. Don't eyeball contrast — compute it (`browser_evaluate` + the WCAG relative-luminance formula, or a contrast checker) against the actual rendered background, per theme.
+- **`Alert` has no built-in `role`/`aria-live`** — checked the component source (`get_source.mjs Alert`), the root `<dom.div>` spreads arbitrary props through but adds neither by default. Any `Alert` used for an error/status that appears asynchronously (e.g. after a failed submit) needs `role="alert" aria-live="assertive"` added explicitly, or screen reader users never hear about it.
 
 ### Forms: always set `validationBehavior="aria"`
 

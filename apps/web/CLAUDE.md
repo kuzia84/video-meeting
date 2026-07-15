@@ -32,6 +32,15 @@ There is no test runner configured for this app yet.
 - **UI: HeroUI v3 + Playwright MCP** — see **`docs/architecture/frontend-ui.md`** for the full guide: HeroUI v3 setup/conventions (compound components, `onPress`, semantic variants, `next-themes` for light/dark — no `HeroUIProvider` in v3), the `validationBehavior="aria"` gotcha for any `Form`, and the Playwright MCP workflow for verifying layout/UI changes against a real browser. Wired up: `postcss.config.mjs`, `src/app/globals.css` (`@import 'tailwindcss'` then `@import '@heroui/styles'`), `src/app/providers.tsx` (`next-themes` `ThemeProvider`, no `HeroUIProvider`), `src/app/layout.tsx` imports `globals.css` and wraps `children` in `<Providers>`.
 - **API client**: `src/lib/api/client.ts` exports `fetchJson<T>(path, options)` — the one shared `fetch` wrapper (plain `fetch`, no HTTP client library) all endpoint files build on; don't inline a new `fetch` call in a feature file, import this instead. It resolves the base URL from `NEXT_PUBLIC_API_URL` (see `.env.example`; defaults to `http://localhost:3001` in code if unset), guards `res.json()` against a non-JSON body (throws a plain `Error` with a clear message rather than an uncaught `SyntaxError`), and on a non-2xx response throws `ApiError` (`status`, `messages: string[]` — normalizing the API's two error shapes, a `string[]` from `ValidationPipe` 400s and a plain `string` from hand-thrown exceptions — plus an optional `field` when the API response includes one, e.g. the 409 duplicate-email conflict sets `field: "email"`; branch on `err.field`, not on `err.status` alone, to target a specific form field). On success it also verifies the response envelope actually has a `data` payload, throwing rather than silently returning `undefined` fields. Feature files (e.g. `src/lib/api/auth.ts`) additionally validate their own expected shape (e.g. `accessToken`/`user` are present) before returning. `src/lib/auth/token.ts` holds the `accessToken` `sessionStorage` helpers (`saveAccessToken`/`getAccessToken`, SSR-guarded) — the only place a token is persisted; reuse it rather than touching storage directly. `saveAccessToken` throws a distinct `StorageError` (not caught by the same handler as a failed API call) so a form can tell "registration succeeded but couldn't persist the session here" apart from "the request itself failed."
 
+## UI change verification (mandatory)
+
+Any change that affects rendered UI is not done until it has been visually verified:
+
+- Visual verification must be done via the **Playwright MCP** tools — do not use any other browser/automation tool for this.
+- Apply the **UI UX Pro Max** skill when designing or reviewing the change.
+- The dev server is already running — do not start it yourself.
+- A UI task is only considered complete after the visual check via Playwright MCP has passed.
+
 ## Keeping documentation current
 
 When a change alters this app's architecture — new routing/layout structure, new shared-package usage, changed build config or path aliases — update this file (and the root `CLAUDE.md` if the change is monorepo-wide) in the same change.
