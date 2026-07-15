@@ -11,6 +11,7 @@ import {
   Label,
   TextField,
 } from '@heroui/react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
 import { ApiError, registerUser } from '@/lib/api/auth';
@@ -133,6 +134,16 @@ export function RegisterForm() {
         <Button type="submit" size="lg" isPending={isSubmitting} isDisabled={isSubmitting}>
           {({ isPending }) => (isPending ? 'Регистрация…' : 'Зарегистрироваться')}
         </Button>
+
+        <p className="text-muted text-center text-sm">
+          Уже есть аккаунт?{' '}
+          <Link
+            href="/login"
+            className="text-accent font-medium underline-offset-4 hover:underline"
+          >
+            Войти
+          </Link>
+        </p>
       </Form>
     </Card>
   );
