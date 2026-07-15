@@ -64,13 +64,15 @@ export class GetMeetingQuery {
 
 ## Текущий инвентарь
 
-| Операция        | Тип     | Класс                  | Хендлер                | Маршрут                     |
-| --------------- | ------- | ---------------------- | ---------------------- | --------------------------- |
-| Регистрация     | Command | `RegisterCommand`      | `RegisterHandler`      | `POST /auth/register` (201) |
-| Логин           | Command | `LoginCommand`         | `LoginHandler`         | `POST /auth/login` (200)    |
-| Создать встречу | Command | `CreateMeetingCommand` | `CreateMeetingHandler` | `POST /meetings` (201)      |
-| Список встреч   | Query   | `ListMeetingsQuery`    | `ListMeetingsHandler`  | `GET /meetings` (200)       |
-| Одна встреча    | Query   | `GetMeetingQuery`      | `GetMeetingHandler`    | `GET /meetings/:id` (200)   |
+| Операция              | Тип     | Класс                  | Хендлер                 | Маршрут                          |
+| --------------------- | ------- | ---------------------- | ----------------------- | -------------------------------- |
+| Регистрация           | Command | `RegisterCommand`      | `RegisterHandler`       | `POST /auth/register` (201)      |
+| Логин                 | Command | `LoginCommand`         | `LoginHandler`          | `POST /auth/login` (200)         |
+| Создать пользователя  | Command | `CreateUserCommand`    | `CreateUserHandler`     | — (внутр., из `RegisterHandler`) |
+| Пользователь по email | Query   | `GetUserByEmailQuery`  | `GetUserByEmailHandler` | — (внутр., из `LoginHandler`)    |
+| Создать встречу       | Command | `CreateMeetingCommand` | `CreateMeetingHandler`  | `POST /meetings` (201)           |
+| Список встреч         | Query   | `ListMeetingsQuery`    | `ListMeetingsHandler`   | `GET /meetings` (200)            |
+| Одна встреча          | Query   | `GetMeetingQuery`      | `GetMeetingHandler`     | `GET /meetings/:id` (200)        |
 
 ## Как это связано
 
@@ -127,6 +129,25 @@ export class MeetingsModule {}
 ```
 
 Забыть добавить хендлер в `providers` → на диспатче упадёт `No handler found for the command`.
+
+## Межмодульное взаимодействие через шину
+
+`CommandBus`/`QueryBus` — общие на всё приложение (`ExplorerService` из `@nestjs/cqrs` регистрирует хендлеры из провайдеров всех загруженных модулей на единых экземплярах шин). Поэтому один модуль может выполнить операцию другого, **не импортируя его и не инжектя его сервисы** — достаточно, что оба модуля подключены в `AppModule`.
+
+Пример — регистрация/логин (`Auth`) обращаются к пользователям (`Users`):
+
+```ts
+// RegisterHandler (модуль Auth) создаёт пользователя командой модуля Users
+const user = await this.commandBus.execute<CreateUserCommand, User>(
+  new CreateUserCommand(email, passwordHash),
+);
+// LoginHandler (Auth) читает пользователя запросом модуля Users
+const user = await this.queryBus.execute<GetUserByEmailQuery, User | null>(
+  new GetUserByEmailQuery(email),
+);
+```
+
+`Auth` зависит только от **классов** `CreateUserCommand`/`GetUserByEmailQuery` (value-объекты из `src/users/`), а не от хендлеров или сервисов `Users` — связи направлены на контракт, циклической зависимости между модулями нет. Так `Users` остаётся единственным владельцем таблицы `user`: обращения к `prisma.user` есть только в его хендлерах.
 
 ## Обработка ошибок
 

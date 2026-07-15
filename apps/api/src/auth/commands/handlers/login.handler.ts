@@ -1,7 +1,8 @@
 import { UnauthorizedException } from '@nestjs/common';
-import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
+import { CommandHandler, ICommandHandler, QueryBus } from '@nestjs/cqrs';
+import { User } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { GetUserByEmailQuery } from '../../../users/queries/get-user-by-email.query';
 import { AuthResult } from '../../auth.types';
 import { TokenService } from '../../token.service';
 import { LoginCommand } from '../login.command';
@@ -15,14 +16,14 @@ const DUMMY_PASSWORD_HASH = bcrypt.hashSync('timing-attack-mitigation', 10);
 @CommandHandler(LoginCommand)
 export class LoginHandler implements ICommandHandler<LoginCommand, AuthResult> {
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly queryBus: QueryBus,
     private readonly tokenService: TokenService,
   ) {}
 
   async execute(command: LoginCommand): Promise<AuthResult> {
-    const user = await this.prisma.user.findUnique({
-      where: { email: command.email },
-    });
+    const user = await this.queryBus.execute<GetUserByEmailQuery, User | null>(
+      new GetUserByEmailQuery(command.email),
+    );
 
     const passwordMatches = await bcrypt.compare(
       command.password,
