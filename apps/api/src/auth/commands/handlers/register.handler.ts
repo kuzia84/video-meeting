@@ -28,7 +28,17 @@ export class RegisterHandler implements ICommandHandler<RegisterCommand, AuthRes
       // duplicate detection — it is atomic and race-free, so no pre-check
       // query is needed.
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-        throw new ConflictException('Email already registered');
+        // A plain object body is used as-is by Nest (not merged with the
+        // default {statusCode,message,error} shape), so all three keys are
+        // set explicitly. `field` lets API consumers map the error onto the
+        // specific form field that conflicted, instead of inferring it from
+        // the status code alone.
+        throw new ConflictException({
+          statusCode: 409,
+          error: 'Conflict',
+          message: 'Email already registered',
+          field: 'email',
+        });
       }
       throw err;
     }

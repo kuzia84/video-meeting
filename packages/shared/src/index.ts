@@ -9,3 +9,11 @@ export interface PaginatedResponse<T> extends ApiResponse<T[]> {
   page: number;
   limit: number;
 }
+
+export interface AuthResult {
+  accessToken: string;
+  user: {
+    id: string;
+    email: string;
+  };
+}

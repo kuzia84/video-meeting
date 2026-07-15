@@ -57,9 +57,13 @@ describe('Auth (e2e)', () => {
       expect(stored?.passwordHash).not.toBe(validCredentials.password);
     });
 
-    it('rejects a duplicate email with 409', async () => {
+    it('rejects a duplicate email with 409 and identifies the conflicting field', async () => {
       await request(app.getHttpServer()).post('/auth/register').send(validCredentials).expect(201);
-      await request(app.getHttpServer()).post('/auth/register').send(validCredentials).expect(409);
+      const res = await request(app.getHttpServer())
+        .post('/auth/register')
+        .send(validCredentials)
+        .expect(409);
+      expect(res.body.field).toBe('email');
     });
 
     it('rejects an invalid email with 400', async () => {

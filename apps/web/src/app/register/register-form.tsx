@@ -12,41 +12,63 @@ import {
   TextField,
 } from '@heroui/react';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ApiError, registerUser } from '@/lib/api/auth';
-import { saveAccessToken } from '@/lib/auth/token';
+import { saveAccessToken, StorageError } from '@/lib/auth/token';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function RegisterForm() {
   const router = useRouter();
+  const isSubmittingRef = useRef(false);
   const [isSubmitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    // Ref-based guard: synchronous and immune to React's state-commit timing,
+    // unlike checking `isSubmitting` state directly (which could momentarily
+    // read stale on a rapid double Enter/click before a re-render commits).
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
     setFormError(null);
     setEmailError(null);
 
     const data = new FormData(e.currentTarget);
-    const email = String(data.get('email'));
-    const password = String(data.get('password'));
+    const email = String(data.get('email') ?? '');
+    const password = String(data.get('password') ?? '');
 
     setSubmitting(true);
     try {
       const result = await registerUser(email, password);
-      saveAccessToken(result.accessToken);
+      try {
+        saveAccessToken(result.accessToken);
+      } catch (storageErr) {
+        // Registration already succeeded server-side — this is a distinct,
+        // non-retryable failure (can't persist the session in this browser),
+        // not a "please try again" network/validation error. Don't redirect:
+        // without a stored token the app can't treat the user as signed in.
+        setFormError(
+          storageErr instanceof StorageError ? storageErr.message : 'Не удалось сохранить сессию.',
+        );
+        return;
+      }
       router.push('/');
     } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
-        setEmailError(err.messages[0]);
-      } else if (err instanceof ApiError) {
-        setFormError(err.messages.join(', '));
+      if (err instanceof ApiError) {
+        if (err.field === 'email') {
+          setEmailError(err.messages[0]);
+        } else {
+          setFormError(err.messages.join(', '));
+        }
+      } else if (err instanceof Error) {
+        setFormError(err.message);
       } else {
-        setFormError('Не удалось подключиться к серверу. Попробуйте ещё раз.');
+        setFormError('Произошла непредвиденная ошибка. Попробуйте ещё раз.');
       }
     } finally {
+      isSubmittingRef.current = false;
       setSubmitting(false);
     }
   }
@@ -105,7 +127,7 @@ export function RegisterForm() {
           <FieldError />
         </TextField>
 
-        <Button type="submit" isPending={isSubmitting}>
+        <Button type="submit" isPending={isSubmitting} isDisabled={isSubmitting}>
           {({ isPending }) => (isPending ? 'Регистрация…' : 'Зарегистрироваться')}
         </Button>
       </Form>

@@ -1,10 +1,4 @@
-export interface AuthResult {
-  accessToken: string;
-  user: {
-    id: string;
-    email: string;
-  };
-}
+export type { AuthResult } from '@video-meetings/shared';
 
 export interface AuthUser {
   userId: string;
