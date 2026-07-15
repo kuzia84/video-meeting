@@ -14,10 +14,30 @@ coverage
 # Playwright MCP snapshot/screenshot artifacts
 .playwright-mcp
 
-# Env
+# Env & secrets — never commit real values. Only *.example templates
+# (with placeholder values) are allowed in git; every real .env is ignored.
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+!.env.*.example
+
+# Keys, certificates, and credential files
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.der
+*.keystore
+*.jks
+id_rsa
+id_rsa.*
+*.secret
+secrets.json
+credentials.json
+service-account*.json
+gha-creds-*.json
 
 # OS
 .DS_Store
