@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Logo } from '@/components/logo';
 import { ApiError, listMeetings, MEETINGS_PAGE_SIZE, type Meeting } from '@/lib/api/meetings';
 import { getAccessToken, getUserEmailFromToken, removeAccessToken } from '@/lib/auth/token';
+import { ELLIPSIS, paginationRange } from './pagination-range';
 
 type Status = 'loading' | 'ready' | 'error';
 
@@ -71,21 +72,33 @@ export function HomeView() {
   const [total, setTotal] = useState(0);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [page, setPage] = useState(1);
+  const [isPaging, setIsPaging] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // React 18 Strict Mode runs effects twice in dev; guard the one-time
   // auth check so it doesn't fire (and redirect) twice.
   const startedRef = useRef(false);
 
+  // Clicking through pages fast leaves several requests in flight, and they can resolve
+  // out of order. Only the newest one may touch state, or the user ends up on a page
+  // they did not ask for last.
+  const requestIdRef = useRef(0);
+
   const loadPage = useCallback(
     async (nextPage: number) => {
+      const requestId = ++requestIdRef.current;
+      setErrorMessage(null);
+      setIsPaging(true);
+
       try {
         const result = await listMeetings(nextPage);
+        if (requestId !== requestIdRef.current) return;
         setMeetings(result.meetings);
         setTotal(result.total);
         setPage(result.page);
         setStatus('ready');
       } catch (err) {
+        if (requestId !== requestIdRef.current) return;
         // Expired/invalid token → the guard returns 401. Drop the dead token
         // and send the user back to login rather than showing an error.
         if (err instanceof ApiError && err.status === 401) {
@@ -94,7 +107,12 @@ export function HomeView() {
           return;
         }
         setErrorMessage(err instanceof Error ? err.message : 'Не удалось загрузить встречи.');
-        setStatus('error');
+        // Only the first load has nothing to fall back on. A later failure keeps the
+        // page already on screen — tearing the list and its pagination down would
+        // strand the user with no way back but a reload.
+        setStatus((prev) => (prev === 'loading' ? 'error' : prev));
+      } finally {
+        if (requestId === requestIdRef.current) setIsPaging(false);
       }
     },
     [router],
@@ -184,7 +202,11 @@ export function HomeView() {
             <>
               {/* Named because the pagination below is a list of <li> too — without this
                   the two are indistinguishable to assistive tech and to tests. */}
-              <ul aria-label="Список встреч" className="flex flex-col gap-3">
+              <ul
+                aria-label="Список встреч"
+                aria-busy={isPaging}
+                className={`flex flex-col gap-3 transition-opacity ${isPaging ? 'opacity-60' : ''}`}
+              >
                 {meetings.map((meeting) => (
                   <li key={meeting.id}>
                     <Card>
@@ -205,28 +227,48 @@ export function HomeView() {
                 ))}
               </ul>
 
+              {/* A failure here is not fatal: the list above is still the last good page,
+                  so report it beside the pagination and let the user try again. */}
+              {errorMessage ? (
+                <p className="text-danger text-center text-sm" role="alert">
+                  {errorMessage}
+                </p>
+              ) : null}
+
               {pageCount > 1 ? (
                 <Pagination className="justify-center" aria-label="Навигация по страницам встреч">
                   <Pagination.Content>
                     <Pagination.Item>
                       <Pagination.Previous
-                        isDisabled={page === 1}
+                        isDisabled={page === 1 || isPaging}
                         onPress={() => void loadPage(page - 1)}
                       >
                         <Pagination.PreviousIcon />
                         <span>Назад</span>
                       </Pagination.Previous>
                     </Pagination.Item>
-                    {Array.from({ length: pageCount }, (_, i) => i + 1).map((p) => (
-                      <Pagination.Item key={p}>
-                        <Pagination.Link isActive={p === page} onPress={() => void loadPage(p)}>
-                          {p}
-                        </Pagination.Link>
-                      </Pagination.Item>
-                    ))}
+                    {paginationRange(page, pageCount).map((slot, index) =>
+                      slot === ELLIPSIS ? (
+                        // Index as key is safe here: the ellipses have no identity of
+                        // their own and never reorder relative to the numbers.
+                        <Pagination.Item key={`gap-${index}`}>
+                          <Pagination.Ellipsis />
+                        </Pagination.Item>
+                      ) : (
+                        <Pagination.Item key={slot}>
+                          <Pagination.Link
+                            isActive={slot === page}
+                            isDisabled={isPaging}
+                            onPress={() => void loadPage(slot)}
+                          >
+                            {slot}
+                          </Pagination.Link>
+                        </Pagination.Item>
+                      ),
+                    )}
                     <Pagination.Item>
                       <Pagination.Next
-                        isDisabled={page === pageCount}
+                        isDisabled={page === pageCount || isPaging}
                         onPress={() => void loadPage(page + 1)}
                       >
                         <span>Вперёд</span>

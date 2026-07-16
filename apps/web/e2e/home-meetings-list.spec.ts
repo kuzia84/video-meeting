@@ -1,7 +1,9 @@
 import { expect, type Page, test } from '@playwright/test';
+import { MEETINGS_PAGE_SIZE } from '../src/lib/api/meetings';
 import { createMeetings, registerUser, signIn } from './support';
 
-const PAGE_SIZE = 10;
+/** Imported, not restated: a hardcoded copy would keep asserting 10 after the app moved on. */
+const PAGE_SIZE = MEETINGS_PAGE_SIZE;
 
 /**
  * Scoped to the named list on purpose: the pagination control renders <li>s of its own,
@@ -57,6 +59,25 @@ test.describe('Home — meetings list', () => {
 
     await expect(meetingItems(page).first()).toContainText(seeded[0].title);
     await expect(page.getByRole('button', { name: 'Назад' })).toBeDisabled();
+  });
+
+  test('keeps the pagination compact when there are many pages', async ({ page, request }) => {
+    const user = await registerUser(request);
+    // 8 pages — past the point where every page still gets its own link.
+    await createMeetings(request, user.token, PAGE_SIZE * 8);
+    await signIn(page, user);
+    await page.goto('/');
+
+    const pageLinks = page.getByRole('navigation').getByRole('button', { name: /^\d+$/ });
+    // Windowed, not one link per page: first, last and a window around the current one.
+    await expect(pageLinks).toHaveCount(3);
+    await expect(pageLinks.first()).toHaveText('1');
+    await expect(pageLinks.last()).toHaveText('8');
+
+    await page.getByRole('button', { name: 'Вперёд' }).click();
+    await expect(meetingItems(page).first()).toContainText('Встреча 11');
+    // Page 2 of 8 shows 1 2 3 … 8 — the window has grown around the current page.
+    await expect(pageLinks).toHaveCount(4);
   });
 
   test('hides pagination when everything fits on one page', async ({ page, request }) => {

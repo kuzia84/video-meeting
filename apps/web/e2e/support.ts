@@ -14,6 +14,14 @@ export interface TestUser {
  * These tests share the dev database, so every run needs its own user rather than a
  * fixed address: a second run would otherwise hit the 409 on a duplicate email, and
  * one test's meetings would show up in another's list.
+ *
+ * KNOWN GAP — the seeded rows are never removed, so each run leaves a handful of users
+ * and their meetings behind. Cleaning up needs either `DELETE /meetings/:id`, which does
+ * not exist yet (it lands in phase 6 of meeting management), or direct database access
+ * from this workspace, which would mean giving apps/web a Prisma dependency purely for
+ * tests. Neither is worth forcing here: the rows are tiny, this is the dev database, and
+ * the API's own e2e suite wipes users wholesale on its next run anyway. Revisit once the
+ * DELETE endpoint exists.
  */
 let userCounter = 0;
 function uniqueEmail(): string {

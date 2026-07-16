@@ -159,6 +159,37 @@ describe('Meetings (e2e)', () => {
     it('rejects an unauthenticated request with 401', async () => {
       await request(app.getHttpServer()).get('/meetings').expect(401);
     });
+
+    it('pages over meetings that share a startTime without repeating or losing any', async () => {
+      const { token } = await registerUser();
+      // Same slot for every one of them: recurring meetings, or a bulk import. Without a
+      // tie-breaker in the ORDER BY, Postgres may order these differently per query, and
+      // skip/take then hands the same row to two pages while another is never returned.
+      const sameStart = '2026-08-01T10:00:00.000Z';
+      for (let i = 0; i < 25; i += 1) {
+        await request(app.getHttpServer())
+          .post('/meetings')
+          .set('Authorization', `Bearer ${token}`)
+          .send({
+            title: `Tied ${i}`,
+            startTime: sameStart,
+            endTime: '2026-08-01T10:30:00.000Z',
+          })
+          .expect(201);
+      }
+
+      const seen: string[] = [];
+      for (let page = 1; page <= 5; page += 1) {
+        const res = await request(app.getHttpServer())
+          .get(`/meetings?page=${page}&limit=5`)
+          .set('Authorization', `Bearer ${token}`)
+          .expect(200);
+        seen.push(...res.body.data.map((m: { id: string }) => m.id));
+      }
+
+      expect(seen).toHaveLength(25);
+      expect(new Set(seen).size).toBe(25);
+    });
   });
 
   describe('GET /meetings/:id', () => {
