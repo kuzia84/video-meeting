@@ -39,6 +39,7 @@ Reuse a milestone whose title already matches rather than creating a duplicate �
 
 - **Title** — the task text from the plan, verbatim, with the `- ` list marker stripped. No numbering, no prefixes.
 - **Body** — what the task is, in this shape: the phase it belongs to, the phase's Цель, the phase's Критерий готовности, and a link to the plan file. This is what a person needs to pick the issue up without reopening the plan.
+  - The plan link must be an **absolute URL** (`https://github.com/{owner}/{repo}/blob/{branch}/{path}`). GitHub renders a relative markdown link in an issue body verbatim, so it resolves against the issue page and 404s. Take `{branch}` from `gh repo view --json defaultBranchRef -q .defaultBranchRef.name`, and make sure the plan file is committed and pushed — otherwise the link is dead for everyone but its author.
 - **Milestone** — the phase's milestone.
 
 ```bash
@@ -69,3 +70,5 @@ Report what was created: milestone count, issue count, and the milestone URLs. I
 | Issue body just repeats the title             | Body carries phase, цель, критерий готовности, link to plan   |
 | Task text rewritten "покрасивее"              | Title is the plan's text verbatim, minus the list marker      |
 | Failed calls swallowed, "готово" reported     | Report exactly which tasks failed                             |
+| Relative plan link in the issue body          | Issues aren't repo files — use the absolute blob URL          |
+| Cyrillic titles arrived as `????`             | On Windows pipe `gh` through bash, not PowerShell 5.1         |
