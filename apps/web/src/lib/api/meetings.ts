@@ -1,4 +1,4 @@
-import { fetchPaginated } from './client';
+import { fetchJson, fetchPaginated } from './client';
 import { getAccessToken } from '@/lib/auth/token';
 import type { PaginatedResponse } from '@video-meetings/shared';
 
@@ -48,4 +48,14 @@ export async function listMeetings(page: number): Promise<MeetingsPage> {
   );
 
   return { meetings: response.data, total: response.total, page: response.page };
+}
+
+// A meeting the caller does not own answers 404 exactly like one that does not exist —
+// the API refuses to confirm it exists at all, so the page cannot tell the two apart
+// and must not try to.
+export function getMeeting(id: string): Promise<Meeting> {
+  return fetchJson<Meeting>(`/meetings/${encodeURIComponent(id)}`, {
+    method: 'GET',
+    headers: authHeaders(),
+  });
 }
