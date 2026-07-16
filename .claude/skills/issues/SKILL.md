@@ -27,13 +27,17 @@ If the plan file has no phases or no tasks, say so and stop. Do not invent them.
 
 ## Creating
 
-**Milestone per phase.** Title is the phase heading without the `##` (e.g. `Фаза 1. Хранение файла и загрузка через API`). Description is the phase's Цель.
+**Milestone per phase.** Title is `<фича> — <phase heading without the ##>`, e.g. `Загрузка файлов — Фаза 1. Хранение файла и загрузка через API`. Take `<фича>` from the plan's H1 with the `План: ` prefix dropped (`# План: Загрузка файла встречи` → `Загрузка файлов`; shorten to a couple of words if the title is long). Description is the phase's Цель.
+
+The prefix is not decoration. Phase numbering restarts at 1 in every plan, so a repo with two features gets two `Фаза 1`, two `Фаза 2`, and a milestone list where nothing says which feature a phase belongs to — GitHub shows no grouping. The prefix is the only thing that separates them.
 
 ```bash
-gh api repos/{owner}/{repo}/milestones --field title="Фаза 1. ..." --field description="<цель фазы>"
+gh api repos/{owner}/{repo}/milestones --field title="Загрузка файлов — Фаза 1. ..." --field description="<цель фазы>"
 ```
 
 Reuse a milestone whose title already matches rather than creating a duplicate — GitHub allows same-title milestones, so a second run without this check silently doubles the backlog.
+
+If existing milestones from an earlier run lack the prefix, rename them in the same pass (`gh api -X PATCH repos/{owner}/{repo}/milestones/{number} --field title="…"`) so the list stays consistent. Renaming keeps every issue attached — the link is by milestone number, not title.
 
 **Issue per task.**
 
@@ -61,14 +65,15 @@ Report what was created: milestone count, issue count, and the milestone URLs. I
 
 ## Common mistakes
 
-| Mistake                                       | Fix                                                           |
-| --------------------------------------------- | ------------------------------------------------------------- |
-| Created issues without showing the plan first | Show everything, wait for confirmation — there's no bulk undo |
-| Hardcoded `owner/repo`                        | Read it from `gh repo view`                                   |
-| Checked `gh auth status` but not write access | Logged in ≠ allowed to write — check `viewerPermission` too   |
-| Second run doubled every milestone            | Check existing titles first, reuse matches                    |
-| Issue body just repeats the title             | Body carries phase, цель, критерий готовности, link to plan   |
-| Task text rewritten "покрасивее"              | Title is the plan's text verbatim, minus the list marker      |
-| Failed calls swallowed, "готово" reported     | Report exactly which tasks failed                             |
-| Relative plan link in the issue body          | Issues aren't repo files — use the absolute blob URL          |
-| Cyrillic titles arrived as `????`             | On Windows pipe `gh` through bash, not PowerShell 5.1         |
+| Mistake                                       | Fix                                                             |
+| --------------------------------------------- | --------------------------------------------------------------- |
+| Created issues without showing the plan first | Show everything, wait for confirmation — there's no bulk undo   |
+| Hardcoded `owner/repo`                        | Read it from `gh repo view`                                     |
+| Checked `gh auth status` but not write access | Logged in ≠ allowed to write — check `viewerPermission` too     |
+| Second run doubled every milestone            | Check existing titles first, reuse matches                      |
+| Two features, two `Фаза 1` — which is which?  | Prefix every milestone with the feature name from the plan's H1 |
+| Issue body just repeats the title             | Body carries phase, цель, критерий готовности, link to plan     |
+| Task text rewritten "покрасивее"              | Title is the plan's text verbatim, minus the list marker        |
+| Failed calls swallowed, "готово" reported     | Report exactly which tasks failed                               |
+| Relative plan link in the issue body          | Issues aren't repo files — use the absolute blob URL            |
+| Cyrillic titles arrived as `????`             | On Windows pipe `gh` through bash, not PowerShell 5.1           |
