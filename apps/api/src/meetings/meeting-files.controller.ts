@@ -7,6 +7,7 @@ import {
   Post,
   StreamableFile,
   UploadedFile,
+  UseFilters,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
@@ -18,6 +19,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { MeetingFileStorage } from '../storage/meeting-file-storage.service';
 import { UploadMeetingFileCommand } from './commands/upload-meeting-file.command';
 import { decodeOriginalName } from './decode-original-name';
+import { UploadSizeLimitFilter } from './filters/upload-size-limit.filter';
 import { MeetingOwnerGuard } from './guards/meeting-owner.guard';
 import { MeetingFileResponse, toMeetingFileResponse } from './meeting-file.response';
 import { GetMeetingFileQuery } from './queries/get-meeting-file.query';
@@ -34,6 +36,7 @@ export class MeetingFilesController {
 
   @Post()
   @UseInterceptors(FileInterceptor('file'))
+  @UseFilters(UploadSizeLimitFilter)
   async upload(
     @Param('meetingId') meetingId: string,
     @UploadedFile() file?: Express.Multer.File,
