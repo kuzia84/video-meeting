@@ -58,13 +58,21 @@ async function main(): Promise<void> {
     create: { email: TEST_EMAIL, passwordHash },
   });
 
-  // Replaced rather than appended, so re-seeding leaves the same three meetings
-  // instead of piling up duplicates. Cascade takes their files with them.
-  await prisma.meeting.deleteMany({ where: { userId: user.id } });
-  await prisma.meeting.createMany({ data: sampleMeetings(user.id) });
+  // Only the seed's own meetings are replaced, matched by title. A blanket
+  // deleteMany on the user would also destroy meetings created by hand while
+  // testing — and re-seeding is exactly what you do after an e2e run wipes the
+  // account, so the command meant to restore it would quietly delete your work.
+  const samples = sampleMeetings(user.id);
+  await prisma.meeting.deleteMany({
+    where: { userId: user.id, title: { in: samples.map((m) => m.title) } },
+  });
+  await prisma.meeting.createMany({ data: samples });
 
-  const meetings = await prisma.meeting.count({ where: { userId: user.id } });
-  console.log(`Seeded ${TEST_EMAIL} (password: ${TEST_PASSWORD}) with ${meetings} meetings.`);
+  const total = await prisma.meeting.count({ where: { userId: user.id } });
+  console.log(
+    `Seeded ${TEST_EMAIL} (password: ${TEST_PASSWORD}) with ${samples.length} sample meetings ` +
+      `(${total} total on the account).`,
+  );
 }
 
 main()

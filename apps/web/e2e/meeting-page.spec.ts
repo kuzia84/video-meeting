@@ -99,6 +99,39 @@ test.describe('Meeting page', () => {
     await expect(page.getByRole('heading', { name: 'Встреча не найдена' })).toHaveCount(0);
   });
 
+  test('retries the failed request in place, without reloading', async ({ page, request }) => {
+    const user = await registerUser(request);
+    const meeting = await createMeeting(request, user.token, { title: 'Восстановилась' });
+    await signIn(page, user);
+
+    let failNext = true;
+    await page.route(`${API_URL}/meetings/*`, (route) => {
+      if (failNext) {
+        failNext = false;
+        return route.abort('failed');
+      }
+      return route.continue();
+    });
+
+    await page.goto(`/meetings/${meeting.id}`);
+    await expect(page.getByRole('heading', { name: 'Не удалось загрузить встречу' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Попробовать снова' }).click();
+
+    await expect(page.getByRole('heading', { name: 'Восстановилась' })).toBeVisible();
+  });
+
+  test('logs out from the meeting page', async ({ page, request }) => {
+    const user = await registerUser(request);
+    const meeting = await createMeeting(request, user.token);
+    await signIn(page, user);
+    await page.goto(`/meetings/${meeting.id}`);
+
+    await page.getByRole('button', { name: 'Выйти' }).click();
+
+    await expect(page).toHaveURL('/login');
+  });
+
   test('goes back to the list from the meeting page', async ({ page, request }) => {
     const user = await registerUser(request);
     const meeting = await createMeeting(request, user.token);
