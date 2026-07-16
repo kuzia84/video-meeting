@@ -18,6 +18,14 @@ export function formatFileSize(bytes: number): string {
     unit += 1;
   }
 
+  // Step up once more when rounding pushes the value to a full 1024: picking the unit
+  // before rounding is what renders 1048575 B as "1 024 КБ" instead of "1 МБ" — the very
+  // output the unit ladder exists to avoid.
+  if (Math.round(value * 10) / 10 >= KB && unit < UNITS.length - 1) {
+    value /= KB;
+    unit += 1;
+  }
+
   // ru-RU renders the decimal separator as a comma, matching the rest of the UI.
   return `${value.toLocaleString('ru-RU', { maximumFractionDigits: 1 })} ${UNITS[unit]}`;
 }

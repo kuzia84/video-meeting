@@ -89,6 +89,22 @@ export interface UploadedFile {
 }
 
 /**
+ * Derived from the extension rather than hardcoded: a helper that always declared
+ * audio/mpeg would post a .wav labelled as mp3 and still pass, so a test named for one
+ * format would quietly exercise another.
+ */
+function mimeTypeFor(name: string): string {
+  const byExtension: Record<string, string> = {
+    '.mp3': 'audio/mpeg',
+    '.wav': 'audio/wav',
+    '.m4a': 'audio/x-m4a',
+    '.mp4': 'video/mp4',
+  };
+  const extension = name.slice(name.lastIndexOf('.')).toLowerCase();
+  return byExtension[extension] ?? 'application/octet-stream';
+}
+
+/**
  * Uploads a file to a meeting through the API. The upload UI does not exist yet (it is
  * phase 5), and once it does, driving it here would test that instead of the list.
  */
@@ -96,12 +112,12 @@ export async function uploadFile(
   request: APIRequestContext,
   token: string,
   meetingId: string,
-  { name = 'recording.mp3', contents = 'fake mp3 payload' } = {},
+  { name = 'recording.mp3', contents = 'fake mp3 payload', mimeType = mimeTypeFor(name) } = {},
 ): Promise<UploadedFile> {
   const res = await request.post(`${API_URL}/meetings/${meetingId}/files`, {
     headers: { Authorization: `Bearer ${token}` },
     multipart: {
-      file: { name, mimeType: 'audio/mpeg', buffer: Buffer.from(contents) },
+      file: { name, mimeType, buffer: Buffer.from(contents) },
     },
   });
   if (!res.ok()) {

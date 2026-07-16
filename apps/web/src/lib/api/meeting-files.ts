@@ -1,4 +1,4 @@
-import { fetchJson } from './client';
+import { fetchBlob, fetchJson } from './client';
 import { getAccessToken } from '@/lib/auth/token';
 
 export { ApiError } from './client';
@@ -13,8 +13,6 @@ export interface MeetingFile {
   mimeType: string;
   createdAt: string;
 }
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
 function authHeaders(): HeadersInit {
   const token = getAccessToken();
@@ -41,16 +39,12 @@ export function listMeetingFiles(meetingId: string): Promise<MeetingFile[]> {
  * the PRD nor the current auth has.
  */
 export async function downloadMeetingFile(file: MeetingFile): Promise<void> {
-  const response = await fetch(
-    `${API_URL}/meetings/${encodeURIComponent(file.meetingId)}/files/${encodeURIComponent(file.id)}`,
+  // fetchBlob, not a bare fetch: the base URL and the ApiError shape belong to client.ts,
+  // so a 401 here is the same recognizable error as a 401 anywhere else.
+  const blob = await fetchBlob(
+    `/meetings/${encodeURIComponent(file.meetingId)}/files/${encodeURIComponent(file.id)}`,
     { method: 'GET', headers: authHeaders() },
   );
-
-  if (!response.ok) {
-    throw new Error('Не удалось скачать файл. Попробуйте ещё раз.');
-  }
-
-  const blob = await response.blob();
   const objectUrl = URL.createObjectURL(blob);
 
   const link = document.createElement('a');

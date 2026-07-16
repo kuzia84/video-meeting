@@ -2,12 +2,7 @@
 
 import { Button } from '@heroui/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  ApiError,
-  downloadMeetingFile,
-  listMeetingFiles,
-  type MeetingFile,
-} from '@/lib/api/meeting-files';
+import { downloadMeetingFile, listMeetingFiles, type MeetingFile } from '@/lib/api/meeting-files';
 import { formatFileSize } from './format-file-size';
 
 type Status = 'loading' | 'ready' | 'error';
@@ -40,7 +35,9 @@ export function MeetingFiles({ meetingId }: { meetingId: string }) {
   const [status, setStatus] = useState<Status>('loading');
   const [files, setFiles] = useState<MeetingFile[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  // A Set, not one id: two downloads can be in flight, and a single value would let the
+  // first to finish re-enable the other's button while it is still fetching.
+  const [downloadingIds, setDownloadingIds] = useState<ReadonlySet<string>>(new Set());
 
   // Strict Mode runs effects twice in dev; the fetch is idempotent, but the guard keeps
   // the request count honest.
@@ -67,16 +64,27 @@ export function MeetingFiles({ meetingId }: { meetingId: string }) {
     void load();
   }, [load]);
 
+  function setDownloading(fileId: string, active: boolean) {
+    setDownloadingIds((current) => {
+      const next = new Set(current);
+      if (active) next.add(fileId);
+      else next.delete(fileId);
+      return next;
+    });
+  }
+
   async function handleDownload(file: MeetingFile) {
-    setDownloadingId(file.id);
+    setDownloading(file.id, true);
     setErrorMessage(null);
     try {
       await downloadMeetingFile(file);
     } catch (err) {
-      const fallback = 'Не удалось скачать файл. Попробуйте ещё раз.';
-      setErrorMessage(err instanceof ApiError || err instanceof Error ? err.message : fallback);
+      // Names the file: with several rows, "не удалось скачать файл" alone leaves the
+      // user guessing which one.
+      const reason = err instanceof Error ? err.message : 'Попробуйте ещё раз.';
+      setErrorMessage(`Не удалось скачать «${file.originalName}». ${reason}`);
     } finally {
-      setDownloadingId(null);
+      setDownloading(file.id, false);
     }
   }
 
@@ -136,12 +144,12 @@ export function MeetingFiles({ meetingId }: { meetingId: string }) {
                 <Button
                   variant="outline"
                   size="sm"
-                  isDisabled={downloadingId === file.id}
+                  isDisabled={downloadingIds.has(file.id)}
                   onPress={() => void handleDownload(file)}
                   // Every row's button reads "Скачать"; the name says which file.
                   aria-label={`Скачать ${file.originalName}`}
                 >
-                  {downloadingId === file.id ? 'Скачивание…' : 'Скачать'}
+                  {downloadingIds.has(file.id) ? 'Скачивание…' : 'Скачать'}
                 </Button>
               </li>
             ))}
