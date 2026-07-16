@@ -232,15 +232,22 @@ describe('Meeting files (e2e)', () => {
      * truncate-grown file costs almost nothing and streams the same over the wire.
      */
     const oversizedPath = join(tmpdir(), 'video-meetings-oversized.mp3');
+    const exactlyAtLimitPath = join(tmpdir(), 'video-meetings-at-limit.mp3');
+
+    async function sparseFile(path: string, bytes: number): Promise<void> {
+      const handle = await open(path, 'w');
+      await handle.truncate(bytes);
+      await handle.close();
+    }
 
     beforeAll(async () => {
-      const handle = await open(oversizedPath, 'w');
-      await handle.truncate(MAX_UPLOAD_BYTES + 1);
-      await handle.close();
+      await sparseFile(oversizedPath, MAX_UPLOAD_BYTES + 1);
+      await sparseFile(exactlyAtLimitPath, MAX_UPLOAD_BYTES);
     });
 
     afterAll(async () => {
       await rm(oversizedPath, { force: true });
+      await rm(exactlyAtLimitPath, { force: true });
     });
 
     it('rejects a file over the limit, naming the limit, and stores nothing', async () => {
@@ -257,6 +264,21 @@ describe('Meeting files (e2e)', () => {
       expect(await prisma.meetingFile.count()).toBe(0);
       // multer streams to disk as it reads, so the partial file must be cleaned up too.
       expect(await filesOnDisk()).toHaveLength(0);
+    }, 60_000);
+
+    it('accepts a file of exactly the limit, which the limit message promises', async () => {
+      const { token } = await registerUser();
+      const meetingId = await createMeeting(token);
+
+      // Busboy trips on *reaching* limits.fileSize, so passing the cap through verbatim
+      // would refuse this file while the 413 text claims 100 MB is allowed.
+      const res = await request(app.getHttpServer())
+        .post(`/meetings/${meetingId}/files`)
+        .set('Authorization', `Bearer ${token}`)
+        .attach('file', exactlyAtLimitPath, { contentType: 'audio/mpeg' })
+        .expect(201);
+
+      expect(res.body.data.size).toBe(MAX_UPLOAD_BYTES);
     }, 60_000);
 
     it('rejects an unsupported type, naming it, and stores nothing', async () => {

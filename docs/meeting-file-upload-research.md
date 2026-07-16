@@ -82,7 +82,9 @@ return new StreamableFile(createReadStream(join(uploadDir, file.storedName)), {
 
 ## Фаза 3. Валидация
 
-**Размер.** Только `limits.fileSize`. Альтернатива из документации Nest — `ParseFilePipe` с `MaxFileSizeValidator` — здесь работает хуже: pipe запускается после того, как multer дописал файл, то есть 101 МБ уже лежат на диске, а время потрачено. `limits.fileSize` рвёт поток на 100 МБ.
+**Размер.** Только `limits.fileSize`. Альтернатива из документации Nest — `ParseFilePipe` с `MaxFileSizeValidator` — здесь работает хуже: pipe запускается после того, как multer дописал файл, то есть 101 МБ уже лежат на диске, а время потрачено. `limits.fileSize` рвёт поток на лимите.
+
+**Граница лимита — off-by-one, на который легко попасться.** Busboy срабатывает при **достижении** `fileSize`, а не при превышении: `if (fileSize === fileSizeLimit) … emit('limit')` (`busboy/lib/types/multipart.js`). Поэтому `limits.fileSize = 100 МБ` отклоняет файл ровно в 100 МБ — при том что сообщение обещает, что 100 МБ можно, а PRD говорит «размером до 100 МБ». Проверено на живом API: на `MAX_UPLOAD_BYTES` приходил 413, на байт меньше — 201. Отсюда `MULTER_FILE_SIZE_LIMIT = MAX_UPLOAD_BYTES + 1`: лимит задаётся на байт дальше последнего разрешённого размера. Граница закрыта e2e-тестом.
 
 **Текст ошибки.** Проверено по исходникам `@nestjs/platform-express/multer/multer/multer.utils.js`: `LIMIT_FILE_SIZE` превращается в `PayloadTooLargeException` с сообщением `File too large` — **лимит в тексте не назван**. PRD требует «сообщение, называющее лимит», поэтому сделан `UploadSizeLimitFilter` (`src/meetings/filters/`), переписывающий тело. Он навешан через `@UseFilters` **только на маршрут загрузки**: глобально он переименовывал бы и посторонние ошибки размера тела.
 
