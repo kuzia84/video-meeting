@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Logo } from '@/components/logo';
 import { ApiError, getMeeting, type Meeting } from '@/lib/api/meetings';
 import { getAccessToken, removeAccessToken } from '@/lib/auth/token';
+import { MeetingFiles } from './meeting-files';
 
 // 'missing' is its own state, not an error: a meeting that is not there is a normal
 // answer to a guessed or stale link, and reads very differently from a failed request.
@@ -168,6 +169,10 @@ export function MeetingView({ meetingId }: { meetingId: string }) {
           )}
         </section>
       </article>
+
+      {/* Rendered only once the meeting itself resolved: on a 404 there is no meeting to
+          hang files off, and asking for its files would just be a second 404. */}
+      <MeetingFiles meetingId={meeting.id} />
     </Shell>
   );
 }

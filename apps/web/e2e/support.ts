@@ -82,6 +82,35 @@ export async function createMeeting(
   return { id: body.data.id, title };
 }
 
+export interface UploadedFile {
+  id: string;
+  originalName: string;
+  size: number;
+}
+
+/**
+ * Uploads a file to a meeting through the API. The upload UI does not exist yet (it is
+ * phase 5), and once it does, driving it here would test that instead of the list.
+ */
+export async function uploadFile(
+  request: APIRequestContext,
+  token: string,
+  meetingId: string,
+  { name = 'recording.mp3', contents = 'fake mp3 payload' } = {},
+): Promise<UploadedFile> {
+  const res = await request.post(`${API_URL}/meetings/${meetingId}/files`, {
+    headers: { Authorization: `Bearer ${token}` },
+    multipart: {
+      file: { name, mimeType: 'audio/mpeg', buffer: Buffer.from(contents) },
+    },
+  });
+  if (!res.ok()) {
+    throw new Error(`Failed to upload ${name}: ${res.status()} ${await res.text()}`);
+  }
+  const body = (await res.json()) as { data: UploadedFile };
+  return body.data;
+}
+
 export async function createMeetings(
   request: APIRequestContext,
   token: string,
