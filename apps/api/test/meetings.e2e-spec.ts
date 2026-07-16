@@ -75,7 +75,8 @@ describe('Meetings (e2e)', () => {
 
     it('rejects a missing title with 400', async () => {
       const { token } = await registerUser();
-      const { title: _title, ...noTitle } = validMeeting();
+      const { description, startTime, endTime } = validMeeting();
+      const noTitle = { description, startTime, endTime };
       await request(app.getHttpServer())
         .post('/meetings')
         .set('Authorization', `Bearer ${token}`)
