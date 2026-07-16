@@ -1,10 +1,7 @@
-import { unlink } from 'node:fs/promises';
-import { join } from 'node:path';
-import { Inject } from '@nestjs/common';
 import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
 import { MeetingFile } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { UPLOAD_DIR } from '../../../storage/storage.constants';
+import { MeetingFileStorage } from '../../../storage/meeting-file-storage.service';
 import { UploadMeetingFileCommand } from '../upload-meeting-file.command';
 
 @CommandHandler(UploadMeetingFileCommand)
@@ -14,7 +11,7 @@ export class UploadMeetingFileHandler implements ICommandHandler<
 > {
   constructor(
     private readonly prisma: PrismaService,
-    @Inject(UPLOAD_DIR) private readonly uploadDir: string,
+    private readonly storage: MeetingFileStorage,
   ) {}
 
   async execute(command: UploadMeetingFileCommand): Promise<MeetingFile> {
@@ -30,7 +27,7 @@ export class UploadMeetingFileHandler implements ICommandHandler<
       });
     } catch (error) {
       // Multer already wrote the file; without this it would outlive the failed row.
-      await unlink(join(this.uploadDir, command.storedName)).catch(() => undefined);
+      await this.storage.remove(command.storedName);
       throw error;
     }
   }

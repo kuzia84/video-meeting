@@ -2,6 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
 import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { MeetingFileStorage } from './meeting-file-storage.service';
 import { UPLOAD_DIR } from './storage.constants';
 
 // Multer does not create its destination, so the directory is made once at startup.
@@ -24,7 +25,8 @@ export function resolveUploadDir(config: ConfigService): string {
       inject: [ConfigService],
       useFactory: resolveUploadDir,
     },
+    MeetingFileStorage,
   ],
-  exports: [UPLOAD_DIR],
+  exports: [UPLOAD_DIR, MeetingFileStorage],
 })
 export class StorageModule {}

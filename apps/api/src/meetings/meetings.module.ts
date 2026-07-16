@@ -9,7 +9,9 @@ import { CreateMeetingHandler } from './commands/handlers/create-meeting.handler
 import { UploadMeetingFileHandler } from './commands/handlers/upload-meeting-file.handler';
 import { MeetingFilesController } from './meeting-files.controller';
 import { MeetingsController } from './meetings.controller';
+import { GetMeetingFileHandler } from './queries/handlers/get-meeting-file.handler';
 import { GetMeetingHandler } from './queries/handlers/get-meeting.handler';
+import { ListMeetingFilesHandler } from './queries/handlers/list-meeting-files.handler';
 import { ListMeetingsHandler } from './queries/handlers/list-meetings.handler';
 
 @Module({
@@ -35,6 +37,8 @@ import { ListMeetingsHandler } from './queries/handlers/list-meetings.handler';
     ListMeetingsHandler,
     GetMeetingHandler,
     UploadMeetingFileHandler,
+    ListMeetingFilesHandler,
+    GetMeetingFileHandler,
   ],
 })
 export class MeetingsModule {}
