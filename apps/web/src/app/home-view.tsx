@@ -1,13 +1,18 @@
 'use client';
 
-import { Button, Card } from '@heroui/react';
+import { Button, buttonVariants, Card, Pagination } from '@heroui/react';
+import NextLink from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Logo } from '@/components/logo';
-import { ApiError, getRecentMeetings, type Meeting } from '@/lib/api/meetings';
+import { ApiError, listMeetings, MEETINGS_PAGE_SIZE, type Meeting } from '@/lib/api/meetings';
 import { getAccessToken, getUserEmailFromToken, removeAccessToken } from '@/lib/auth/token';
+import { ELLIPSIS, paginationRange } from './pagination-range';
 
 type Status = 'loading' | 'ready' | 'error';
+
+/** Where the "create a meeting" actions lead. The page itself arrives in a later phase. */
+const CREATE_MEETING_HREF = '/meetings/new';
 
 const dateFormatter = new Intl.DateTimeFormat('ru-RU', {
   day: 'numeric',
@@ -43,17 +48,75 @@ function CalendarIcon(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
+/**
+ * Navigation that looks like a button, so it is a real <a>: middle-click and
+ * "open in new tab" work, and Next prefetches it like any other route link.
+ *
+ * Styled via `buttonVariants` rather than <Button render={…}> — HeroUI's documented
+ * way to dress a framework link, and the render route warns at runtime
+ * ("Expected <button>, got <a>. This may break the component behavior and
+ * accessibility") because Button builds on React Aria's button behaviour.
+ */
+function CreateMeetingLink({ children, size }: { children: string; size?: 'lg' }) {
+  return (
+    <NextLink className={buttonVariants({ size })} href={CREATE_MEETING_HREF}>
+      {children}
+    </NextLink>
+  );
+}
+
 export function HomeView() {
   const router = useRouter();
   const [status, setStatus] = useState<Status>('loading');
   const [email, setEmail] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
-  const [recent, setRecent] = useState<Meeting[]>([]);
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [page, setPage] = useState(1);
+  const [isPaging, setIsPaging] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // React 18 Strict Mode runs effects twice in dev; guard the one-time
-  // auth check + fetch so it doesn't fire (and redirect) twice.
+  // auth check so it doesn't fire (and redirect) twice.
   const startedRef = useRef(false);
+
+  // Clicking through pages fast leaves several requests in flight, and they can resolve
+  // out of order. Only the newest one may touch state, or the user ends up on a page
+  // they did not ask for last.
+  const requestIdRef = useRef(0);
+
+  const loadPage = useCallback(
+    async (nextPage: number) => {
+      const requestId = ++requestIdRef.current;
+      setErrorMessage(null);
+      setIsPaging(true);
+
+      try {
+        const result = await listMeetings(nextPage);
+        if (requestId !== requestIdRef.current) return;
+        setMeetings(result.meetings);
+        setTotal(result.total);
+        setPage(result.page);
+        setStatus('ready');
+      } catch (err) {
+        if (requestId !== requestIdRef.current) return;
+        // Expired/invalid token → the guard returns 401. Drop the dead token
+        // and send the user back to login rather than showing an error.
+        if (err instanceof ApiError && err.status === 401) {
+          removeAccessToken();
+          router.replace('/login');
+          return;
+        }
+        setErrorMessage(err instanceof Error ? err.message : 'Не удалось загрузить встречи.');
+        // Only the first load has nothing to fall back on. A later failure keeps the
+        // page already on screen — tearing the list and its pagination down would
+        // strand the user with no way back but a reload.
+        setStatus((prev) => (prev === 'loading' ? 'error' : prev));
+      } finally {
+        if (requestId === requestIdRef.current) setIsPaging(false);
+      }
+    },
+    [router],
+  );
 
   useEffect(() => {
     if (startedRef.current) return;
@@ -66,30 +129,20 @@ export function HomeView() {
       return;
     }
     setEmail(getUserEmailFromToken());
-
-    getRecentMeetings()
-      .then(({ total: t, recent: r }) => {
-        setTotal(t);
-        setRecent(r);
-        setStatus('ready');
-      })
-      .catch((err) => {
-        // Expired/invalid token → the guard returns 401. Drop the dead token
-        // and send the user back to login rather than showing an error.
-        if (err instanceof ApiError && err.status === 401) {
-          removeAccessToken();
-          router.replace('/login');
-          return;
-        }
-        setErrorMessage(err instanceof Error ? err.message : 'Не удалось загрузить встречи.');
-        setStatus('error');
-      });
-  }, [router]);
+    void loadPage(1);
+  }, [router, loadPage]);
 
   function handleLogout() {
     removeAccessToken();
     router.replace('/login');
   }
+
+  const pageCount = Math.max(1, Math.ceil(total / MEETINGS_PAGE_SIZE));
+  // The empty state carries its own invitation, so the page-level CTA stands down while
+  // it is on screen: two identical primary buttons would compete for the same click.
+  // On an error there is no empty state, so the CTA stays — otherwise a failed load
+  // would leave the user with no way forward at all.
+  const showsEmptyState = status !== 'error' && meetings.length === 0;
 
   if (status === 'loading') {
     return (
@@ -123,47 +176,109 @@ export function HomeView() {
           </p>
         </section>
 
-        {/* Creating meetings is done via the API only (out of scope here), so
-            this primary CTA is present as the obvious next action but has no
-            client flow wired to it yet. */}
-        <Button size="lg" className="self-start">
-          Создать встречу
-        </Button>
+        {showsEmptyState ? null : (
+          <div className="self-start">
+            <CreateMeetingLink size="lg">Создать встречу</CreateMeetingLink>
+          </div>
+        )}
 
         <section className="flex flex-col gap-4">
-          <h2 className="text-lg font-semibold tracking-tight">Последние встречи</h2>
+          <h2 className="text-lg font-semibold tracking-tight">Ваши встречи</h2>
 
           {status === 'error' ? (
             <p className="text-danger text-sm">{errorMessage}</p>
-          ) : recent.length === 0 ? (
+          ) : showsEmptyState ? (
             <div className="border-border flex flex-col items-center gap-3 rounded-xl border border-dashed px-4 py-12 text-center">
               <CalendarIcon className="text-muted size-12" />
               <p className="font-medium">Встреч пока нет</p>
               <p className="text-muted max-w-xs text-sm text-balance">
-                Здесь появятся ваши встречи, как только они будут созданы.
+                Создайте первую встречу — сюда можно будет загрузить её запись.
               </p>
+              {/* Wording differs from the CTA above on purpose: two buttons reading
+                  "Создать встречу" would be ambiguous to screen readers and to tests. */}
+              <CreateMeetingLink>Создать первую встречу</CreateMeetingLink>
             </div>
           ) : (
-            <ul className="flex flex-col gap-3">
-              {recent.map((meeting) => (
-                <li key={meeting.id}>
-                  <Card>
-                    <Card.Header>
-                      <Card.Title>{meeting.title}</Card.Title>
-                      <Card.Description>
-                        {dateFormatter.format(new Date(meeting.startTime))} —{' '}
-                        {dateFormatter.format(new Date(meeting.endTime))}
-                      </Card.Description>
-                    </Card.Header>
-                    {meeting.description ? (
-                      <Card.Content>
-                        <p className="text-muted text-sm">{meeting.description}</p>
-                      </Card.Content>
-                    ) : null}
-                  </Card>
-                </li>
-              ))}
-            </ul>
+            <>
+              {/* Named because the pagination below is a list of <li> too — without this
+                  the two are indistinguishable to assistive tech and to tests. */}
+              <ul
+                aria-label="Список встреч"
+                aria-busy={isPaging}
+                className={`flex flex-col gap-3 transition-opacity ${isPaging ? 'opacity-60' : ''}`}
+              >
+                {meetings.map((meeting) => (
+                  <li key={meeting.id}>
+                    <Card>
+                      <Card.Header>
+                        <Card.Title>{meeting.title}</Card.Title>
+                        <Card.Description>
+                          {dateFormatter.format(new Date(meeting.startTime))} —{' '}
+                          {dateFormatter.format(new Date(meeting.endTime))}
+                        </Card.Description>
+                      </Card.Header>
+                      {meeting.description ? (
+                        <Card.Content>
+                          <p className="text-muted text-sm">{meeting.description}</p>
+                        </Card.Content>
+                      ) : null}
+                    </Card>
+                  </li>
+                ))}
+              </ul>
+
+              {/* A failure here is not fatal: the list above is still the last good page,
+                  so report it beside the pagination and let the user try again. */}
+              {errorMessage ? (
+                <p className="text-danger text-center text-sm" role="alert">
+                  {errorMessage}
+                </p>
+              ) : null}
+
+              {pageCount > 1 ? (
+                <Pagination className="justify-center" aria-label="Навигация по страницам встреч">
+                  <Pagination.Content>
+                    <Pagination.Item>
+                      <Pagination.Previous
+                        isDisabled={page === 1 || isPaging}
+                        onPress={() => void loadPage(page - 1)}
+                      >
+                        <Pagination.PreviousIcon />
+                        <span>Назад</span>
+                      </Pagination.Previous>
+                    </Pagination.Item>
+                    {paginationRange(page, pageCount).map((slot, index) =>
+                      slot === ELLIPSIS ? (
+                        // Index as key is safe here: the ellipses have no identity of
+                        // their own and never reorder relative to the numbers.
+                        <Pagination.Item key={`gap-${index}`}>
+                          <Pagination.Ellipsis />
+                        </Pagination.Item>
+                      ) : (
+                        <Pagination.Item key={slot}>
+                          <Pagination.Link
+                            isActive={slot === page}
+                            isDisabled={isPaging}
+                            onPress={() => void loadPage(slot)}
+                          >
+                            {slot}
+                          </Pagination.Link>
+                        </Pagination.Item>
+                      ),
+                    )}
+                    <Pagination.Item>
+                      <Pagination.Next
+                        isDisabled={page === pageCount || isPaging}
+                        onPress={() => void loadPage(page + 1)}
+                      >
+                        <span>Вперёд</span>
+                        <Pagination.NextIcon />
+                      </Pagination.Next>
+                    </Pagination.Item>
+                  </Pagination.Content>
+                </Pagination>
+              ) : null}
+            </>
           )}
         </section>
       </main>

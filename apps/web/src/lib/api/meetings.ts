@@ -18,9 +18,8 @@ export interface Meeting {
 }
 
 // GET /meetings is JWT-protected: the guard requires an `Authorization: Bearer
-// <token>` header (note the trailing space after "Bearer"). fetchPaginated
-// spreads `options` over its default headers, so pass Content-Type too or it's
-// lost.
+// <token>` header. fetchPaginated spreads `options` over its default headers,
+// so pass Content-Type too or it's lost.
 function authHeaders(): HeadersInit {
   const token = getAccessToken();
   return {
@@ -29,51 +28,24 @@ function authHeaders(): HeadersInit {
   };
 }
 
-const RECENT_LIMIT = 3;
+/** How many meetings one page of the home list shows. */
+export const MEETINGS_PAGE_SIZE = 10;
 
-function fetchMeetingsPage(page: number, limit: number): Promise<PaginatedResponse<Meeting>> {
-  return fetchPaginated<Meeting>(`/meetings?page=${page}&limit=${limit}`, {
-    method: 'GET',
-    headers: authHeaders(),
-  });
-}
-
-export interface RecentMeetings {
+export interface MeetingsPage {
+  meetings: Meeting[];
+  /** Total across all pages — drives both the page count and the header count. */
   total: number;
-  recent: Meeting[];
+  page: number;
 }
 
-// The home page needs the authoritative meeting count and the three most recent
-// meetings. The API paginates and only sorts by startTime ASC, so the newest
-// meetings live at the *end* of the last page. We drive that with server-side
-// pagination rather than pulling everything into memory:
-//   1. Fetch page 1 (limit 3) — this also yields `total`.
-//   2. If total ≤ 3, that page already holds every meeting: reverse for
-//      most-recent-first and we're done in a single request.
-//   3. Otherwise fetch the last page; if its remainder is < 3 items, also fetch
-//      the previous page so we always have the final three, then reverse.
-export async function getRecentMeetings(): Promise<RecentMeetings> {
-  const firstPage = await fetchMeetingsPage(1, RECENT_LIMIT);
-  const total = firstPage.total;
+// The home page shows the full list a page at a time, so it maps straight onto the
+// API's own pagination — no client-side slicing, and only one page is ever in memory.
+// Ordering is the API's: startTime ascending, the only order it supports.
+export async function listMeetings(page: number): Promise<MeetingsPage> {
+  const response: PaginatedResponse<Meeting> = await fetchPaginated<Meeting>(
+    `/meetings?page=${page}&limit=${MEETINGS_PAGE_SIZE}`,
+    { method: 'GET', headers: authHeaders() },
+  );
 
-  if (total <= RECENT_LIMIT) {
-    return { total, recent: [...firstPage.data].reverse() };
-  }
-
-  const lastPageNumber = Math.ceil(total / RECENT_LIMIT);
-  const lastPage = await fetchMeetingsPage(lastPageNumber, RECENT_LIMIT);
-  let tail = lastPage.data;
-
-  // A partial last page (total not divisible by 3) holds fewer than 3 of the
-  // newest meetings; pull the previous page to backfill up to three. When that
-  // previous page is page 1 (total of 4 or 5), reuse the `firstPage` we already
-  // fetched instead of re-requesting it.
-  if (tail.length < RECENT_LIMIT && lastPageNumber > 1) {
-    const prevPageNumber = lastPageNumber - 1;
-    const prevPage =
-      prevPageNumber === 1 ? firstPage : await fetchMeetingsPage(prevPageNumber, RECENT_LIMIT);
-    tail = [...prevPage.data, ...tail];
-  }
-
-  return { total, recent: tail.slice(-RECENT_LIMIT).reverse() };
+  return { meetings: response.data, total: response.total, page: response.page };
 }

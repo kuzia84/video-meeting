@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "lint:fix": "next lint --fix",
+    "test:e2e": "playwright test",
     "clean": "rm -rf .next"
   },
   "dependencies": {
@@ -24,6 +25,7 @@
     "tailwindcss": "^4.3.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

@@ -18,6 +18,10 @@ apps/api/test/.uploads-e2e
 # Playwright MCP snapshot/screenshot artifacts
 .playwright-mcp
 
+# Playwright test run output (traces, reports)
+test-results
+playwright-report
+
 # Env & secrets — never commit real values. Only *.example templates
 # (with placeholder values) are allowed in git; every real .env is ignored.
 .env
