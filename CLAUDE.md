@@ -21,7 +21,7 @@ npm run dev          # turbo run dev — starts web (3000) and api (3001) concur
 npm run build         # turbo run build — builds shared, then api and web in parallel (^build dependency)
 npm run lint          # turbo run lint
 npm run lint:fix      # turbo run lint:fix
-npm run test          # turbo run test — currently only apps/api has tests
+npm run test          # turbo run test — unit tests; currently only apps/api has any
 npm run clean         # turbo run clean
 npm run format        # prettier --write across the whole repo
 npm run format:check
@@ -35,6 +35,13 @@ To scope a command to a single workspace, use npm's `-w` flag or `turbo run <tas
 ```bash
 npm run test -w @video-meetings/api
 npm run dev -w @video-meetings/web
+```
+
+**E2E suites are not part of `npm run test`** — both need a running Postgres, so they stay out of the cached turbo task and are run on purpose:
+
+```bash
+npm run test:e2e -w @video-meetings/api   # API e2e (supertest)
+npm run test:e2e -w @video-meetings/web   # browser e2e (Playwright; needs `npx playwright install chromium` once)
 ```
 
 Running a single test file (from `apps/api`, or via `-w @video-meetings/api`):
