@@ -69,6 +69,40 @@ export async function fetchJson<T>(path: string, options?: RequestInit): Promise
 // Like fetchJson, but for the API's paginated endpoints — returns the whole
 // envelope (`data: T[]` plus `total`/`page`/`limit`) so callers can drive
 // server-side pagination rather than assuming everything fits in one response.
+/**
+ * Like fetchJson, but for endpoints that answer with bytes instead of an envelope —
+ * file downloads. Shares this module's base-URL resolution and ApiError normalization,
+ * so a 401 on a download is the same recognizable error as a 401 anywhere else, rather
+ * than an anonymous "request failed" invented at the call site.
+ *
+ * It cannot go through `request()`: that one always parses the body as JSON, which is
+ * exactly what must not happen to a 100 MB recording.
+ */
+export async function fetchBlob(path: string, options?: RequestInit): Promise<Blob> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, options);
+  } catch {
+    throw new Error('Не удалось подключиться к серверу. Попробуйте ещё раз.');
+  }
+
+  if (!res.ok) {
+    // Errors stay JSON even on this route, so the shape below matches every other call.
+    let messages = ['Не удалось скачать файл. Попробуйте ещё раз.'];
+    try {
+      const body = (await res.json()) as ErrorBody;
+      if (body.message) {
+        messages = Array.isArray(body.message) ? body.message : [body.message];
+      }
+    } catch {
+      // Non-JSON error body: keep the fallback above rather than throwing over it.
+    }
+    throw new ApiError(res.status, messages);
+  }
+
+  return res.blob();
+}
+
 export async function fetchPaginated<T>(
   path: string,
   options?: RequestInit,
