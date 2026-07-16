@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, rm } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, truncate } from 'node:fs/promises';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import type { Response } from 'superagent';
@@ -376,6 +376,37 @@ describe('Meeting files (e2e)', () => {
         .get(`/meetings/${meetingId}/files/${fileId}`)
         .set('Authorization', `Bearer ${token}`)
         .expect(404);
+    });
+
+    it('returns 404 when the bytes on disk no longer match the recorded size', async () => {
+      const { token } = await registerUser();
+      const meetingId = await createMeeting(token);
+      const fileId = await upload(token, meetingId);
+
+      const row = await prisma.meetingFile.findUniqueOrThrow({ where: { id: fileId } });
+      await truncate(`${uploadDir}/${row.storedName}`, 3);
+
+      // Streaming this would either abort the download (Content-Length promising bytes
+      // the stream lacks) or hand over a silently corrupt file. Both are worse than 404.
+      await request(app.getHttpServer())
+        .get(`/meetings/${meetingId}/files/${fileId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(404);
+    });
+
+    it('sends nosniff so the declared type cannot be second-guessed', async () => {
+      const { token } = await registerUser();
+      const meetingId = await createMeeting(token);
+      const fileId = await upload(token, meetingId);
+
+      const res = await request(app.getHttpServer())
+        .get(`/meetings/${meetingId}/files/${fileId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .buffer()
+        .parse(binaryParser)
+        .expect(200);
+
+      expect(res.headers['x-content-type-options']).toBe('nosniff');
     });
 
     it('does not hand a file to another user', async () => {

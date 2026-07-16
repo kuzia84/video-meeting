@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Controller,
   Get,
+  Header,
   Param,
   Post,
   StreamableFile,
@@ -62,6 +63,10 @@ export class MeetingFilesController {
   }
 
   @Get(':fileId')
+  // mimeType is whatever the uploader declared — it is never verified against the bytes.
+  // `attachment` already stops a browser rendering it; nosniff stops it second-guessing
+  // the type we send, so neither relies on the other alone.
+  @Header('X-Content-Type-Options', 'nosniff')
   async download(
     @Param('meetingId') meetingId: string,
     @Param('fileId') fileId: string,
@@ -70,7 +75,12 @@ export class MeetingFilesController {
       new GetMeetingFileQuery(meetingId, fileId),
     );
 
-    return new StreamableFile(await this.storage.openReadStream(file.storedName), {
+    // Verifies the bytes still match the row before streaming, so the Content-Length
+    // below cannot promise more than the stream delivers (which would abort the
+    // download rather than fail cleanly).
+    const stream = await this.storage.open(file.storedName, file.size);
+
+    return new StreamableFile(stream, {
       type: file.mimeType,
       length: file.size,
       // RFC 5987 form: a bare filename="…" is ASCII-only and would mangle a Cyrillic name.

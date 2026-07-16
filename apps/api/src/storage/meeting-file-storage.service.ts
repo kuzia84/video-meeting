@@ -1,5 +1,5 @@
 import { createReadStream, ReadStream } from 'node:fs';
-import { access, constants, unlink } from 'node:fs/promises';
+import { stat, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { UPLOAD_DIR } from './storage.constants';
@@ -9,23 +9,35 @@ import { UPLOAD_DIR } from './storage.constants';
 export class MeetingFileStorage {
   constructor(@Inject(UPLOAD_DIR) private readonly uploadDir: string) {}
 
-  pathFor(storedName: string): string {
+  private pathFor(storedName: string): string {
     return join(this.uploadDir, storedName);
   }
 
   /**
-   * A row can outlive its bytes (wiped directory, restored DB dump), so existence is
-   * checked up front: `createReadStream` would raise ENOENT inside the stream instead,
-   * once 200 is already on the wire, and the client would see a truncated download
-   * rather than an error.
+   * Opens a stored file, refusing anything that no longer matches what was uploaded.
+   *
+   * A row can outlive its bytes, whole or in part — a wiped directory, a DB dump
+   * restored next to a stale volume, an interrupted copy. The file is therefore
+   * measured before it is opened rather than streamed on trust:
+   *   - a missing path 404s here, instead of `createReadStream` raising ENOENT inside
+   *     the stream once 200 is already on the wire, which truncates the download;
+   *   - a size that disagrees with `expectedSize` means the content is damaged. Stored
+   *     files are immutable, so this can only be corruption — and serving it would hand
+   *     the caller a silently broken file while claiming success.
    */
-  async openReadStream(storedName: string): Promise<ReadStream> {
+  async open(storedName: string, expectedSize: number): Promise<ReadStream> {
     const path = this.pathFor(storedName);
+
+    let stats;
     try {
-      await access(path, constants.R_OK);
+      stats = await stat(path);
     } catch {
       throw new NotFoundException('File content not found');
     }
+    if (!stats.isFile() || stats.size !== expectedSize) {
+      throw new NotFoundException('File content not found');
+    }
+
     return createReadStream(path);
   }
 

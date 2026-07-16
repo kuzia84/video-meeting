@@ -1,3 +1,4 @@
+import { NotFoundException } from '@nestjs/common';
 import { IQueryHandler, QueryHandler } from '@nestjs/cqrs';
 import { MeetingFile } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -12,6 +13,12 @@ export class ListMeetingFilesHandler implements IQueryHandler<
   constructor(private readonly prisma: PrismaService) {}
 
   async execute(query: ListMeetingFilesQuery): Promise<MeetingFile[]> {
+    // Prisma drops an `undefined` filter instead of matching nothing, which here would
+    // widen the query from "this meeting's files" to every file in the database.
+    if (typeof query.meetingId !== 'string' || query.meetingId === '') {
+      throw new NotFoundException('Meeting not found');
+    }
+
     return this.prisma.meetingFile.findMany({
       where: { meetingId: query.meetingId },
       // `id` breaks ties: uploads within the same millisecond would otherwise order
