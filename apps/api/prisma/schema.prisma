@@ -16,12 +16,26 @@ model User {
 }
 
 model Meeting {
-  id          String   @id @default(uuid())
+  id          String        @id @default(uuid())
   title       String
   description String?
   startTime   DateTime
   endTime     DateTime
-  createdAt   DateTime @default(now())
+  createdAt   DateTime      @default(now())
   userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  files       MeetingFile[]
+}
+
+model MeetingFile {
+  id           String   @id @default(uuid())
+  originalName String
+  storedName   String   @unique
+  size         Int
+  mimeType     String
+  createdAt    DateTime @default(now())
+  meetingId    String
+  meeting      Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@index([meetingId])
 }

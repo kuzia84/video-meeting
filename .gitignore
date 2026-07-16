@@ -11,6 +11,10 @@ next-env.d.ts
 # Coverage
 coverage
 
+# Uploaded meeting files (dev storage and the isolated e2e run directory)
+apps/api/uploads
+apps/api/test/.uploads-e2e
+
 # Playwright MCP snapshot/screenshot artifacts
 .playwright-mcp
 
