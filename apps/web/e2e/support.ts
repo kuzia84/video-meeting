@@ -57,7 +57,11 @@ export interface SeededMeeting {
 export async function createMeeting(
   request: APIRequestContext,
   token: string,
-  { index = 0, title = `Встреча ${index + 1}` }: { index?: number; title?: string } = {},
+  {
+    index = 0,
+    title = `Встреча ${index + 1}`,
+    description = null,
+  }: { index?: number; title?: string; description?: string | null } = {},
 ): Promise<SeededMeeting> {
   const start = new Date(Date.UTC(2026, 7, 1, 9, 0, 0) + index * 60 * 60 * 1000);
   const end = new Date(start.getTime() + 30 * 60 * 1000);
@@ -66,7 +70,7 @@ export async function createMeeting(
     headers: { Authorization: `Bearer ${token}` },
     data: {
       title,
-      description: null,
+      description,
       startTime: start.toISOString(),
       endTime: end.toISOString(),
     },

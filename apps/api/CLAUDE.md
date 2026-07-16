@@ -19,8 +19,11 @@ npm run lint:fix
 npm run test              # jest (unit tests, *.spec.ts under src/)
 npm run test:e2e           # jest --config ./test/jest-e2e.json (*.e2e-spec.ts under test/) — requires Postgres running (`npm run db:up` from repo root)
 npm run clean               # rm -rf dist
+npm run db:seed              # ts-node prisma/seed.ts — the fixed dev account (see below)
 npx prisma migrate dev      # apply/create migrations against the running Postgres
 ```
+
+**Fixed development account** (`prisma/seed.ts`): `test@mail.com` / `Pasword1!`, with three sample meetings so the account is worth opening. The seed is idempotent — it upserts the user and replaces that user's meetings, so re-running neither fails on the unique email nor piles up duplicates. **It does not survive `npm run test:e2e`**: the API e2e specs call `prisma.user.deleteMany()` in `beforeEach`, which takes this account with everything else, so re-seed after a test run. Nothing in the test suites depends on it — they mint their own throwaway users; it exists only for poking at the app by hand. The password is written in the seed and in this file on purpose: it guards nothing but a local dev database, and must never be reused anywhere real.
 
 Run a single test:
 

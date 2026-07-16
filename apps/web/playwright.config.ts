@@ -25,6 +25,11 @@ export default defineConfig({
   use: {
     baseURL: WEB_URL,
     trace: 'on-first-retry',
+    // Pinned so assertions on rendered dates mean the same thing everywhere. The app
+    // formats times in the browser's zone, so without this a developer in UTC+3 and a
+    // CI box in UTC disagree about what "09:00 UTC" reads as, and whoever wrote the
+    // test wins by accident.
+    timezoneId: 'UTC',
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: [

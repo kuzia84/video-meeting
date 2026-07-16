@@ -209,20 +209,27 @@ export function HomeView() {
               >
                 {meetings.map((meeting) => (
                   <li key={meeting.id}>
-                    <Card>
-                      <Card.Header>
-                        <Card.Title>{meeting.title}</Card.Title>
-                        <Card.Description>
-                          {dateFormatter.format(new Date(meeting.startTime))} —{' '}
-                          {dateFormatter.format(new Date(meeting.endTime))}
-                        </Card.Description>
-                      </Card.Header>
-                      {meeting.description ? (
-                        <Card.Content>
-                          <p className="text-muted text-sm">{meeting.description}</p>
-                        </Card.Content>
-                      ) : null}
-                    </Card>
+                    {/* The whole card is the link, so the target is as big as it looks
+                        rather than just the title. */}
+                    <NextLink
+                      href={`/meetings/${meeting.id}`}
+                      className="focus-visible:outline-accent block rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2"
+                    >
+                      <Card className="hover:border-accent transition-colors">
+                        <Card.Header>
+                          <Card.Title>{meeting.title}</Card.Title>
+                          <Card.Description>
+                            {dateFormatter.format(new Date(meeting.startTime))} —{' '}
+                            {dateFormatter.format(new Date(meeting.endTime))}
+                          </Card.Description>
+                        </Card.Header>
+                        {meeting.description ? (
+                          <Card.Content>
+                            <p className="text-muted text-sm">{meeting.description}</p>
+                          </Card.Content>
+                        ) : null}
+                      </Card>
+                    </NextLink>
                   </li>
                 ))}
               </ul>

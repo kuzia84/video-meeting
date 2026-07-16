@@ -10,6 +10,7 @@
     "lint:fix": "eslint \"{src,test}/**/*.ts\" --fix",
     "test": "jest",
     "test:e2e": "jest --config ./test/jest-e2e.json",
+    "db:seed": "ts-node prisma/seed.ts",
     "clean": "rm -rf dist"
   },
   "dependencies": {
