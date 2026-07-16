@@ -28,7 +28,13 @@ export class MeetingOwnerGuard implements CanActivate {
       throw new UnauthorizedException();
     }
 
+    // Prisma drops an `undefined` filter instead of matching nothing, so a missing
+    // param would turn the ownership check into "does this user own any meeting".
     const meetingId = request.params.meetingId;
+    if (typeof meetingId !== 'string' || meetingId === '') {
+      throw new NotFoundException('Meeting not found');
+    }
+
     const meeting = await this.prisma.meeting.findFirst({
       where: { id: meetingId, userId },
       select: { id: true },

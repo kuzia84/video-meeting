@@ -5,7 +5,6 @@ import { MulterModule } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { AuthModule } from '../auth/auth.module';
 import { UPLOAD_DIR } from '../storage/storage.constants';
-import { StorageModule } from '../storage/storage.module';
 import { CreateMeetingHandler } from './commands/handlers/create-meeting.handler';
 import { UploadMeetingFileHandler } from './commands/handlers/upload-meeting-file.handler';
 import { MeetingFilesController } from './meeting-files.controller';
@@ -17,9 +16,8 @@ import { ListMeetingsHandler } from './queries/handlers/list-meetings.handler';
   imports: [
     CqrsModule,
     AuthModule,
-    StorageModule,
+    // StorageModule is @Global and imported in AppModule, so UPLOAD_DIR needs no import here.
     MulterModule.registerAsync({
-      imports: [StorageModule],
       inject: [UPLOAD_DIR],
       useFactory: (uploadDir: string) => ({
         storage: diskStorage({

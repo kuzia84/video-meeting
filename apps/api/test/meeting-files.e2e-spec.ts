@@ -5,6 +5,10 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { UPLOAD_DIR } from '../src/storage/storage.constants';
+// Load-bearing beyond the constant: importing setup-e2e sets UPLOAD_DIR to the isolated
+// directory even if this suite is ever run through a config without its `setupFiles`.
+// This matters — the suite wipes that directory between tests.
+import { ISOLATED_UPLOAD_DIR_NAME } from './setup-e2e';
 
 interface RegisteredUser {
   token: string;
@@ -54,6 +58,16 @@ describe('Meeting files (e2e)', () => {
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
     prisma = moduleFixture.get(PrismaService);
     uploadDir = moduleFixture.get<string>(UPLOAD_DIR);
+
+    // This suite wipes uploadDir between tests, so refuse to run unless setup-e2e.ts
+    // pointed it at the isolated directory — otherwise it would delete real uploads.
+    if (!uploadDir.endsWith(ISOLATED_UPLOAD_DIR_NAME)) {
+      throw new Error(
+        `Refusing to run: UPLOAD_DIR resolved to "${uploadDir}", not the isolated ` +
+          `"${ISOLATED_UPLOAD_DIR_NAME}". Is test/setup-e2e.ts wired up via setupFiles?`,
+      );
+    }
+
     await app.init();
   });
 
