@@ -1,9 +1,12 @@
-import { mkdir, readdir, readFile, rm, truncate } from 'node:fs/promises';
+import { mkdir, open, readdir, readFile, rm, truncate } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import type { Response } from 'superagent';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { MAX_UPLOAD_BYTES } from '../src/meetings/meeting-file-validation';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { UPLOAD_DIR } from '../src/storage/storage.constants';
 // Load-bearing beyond the constant: importing setup-e2e sets UPLOAD_DIR to the isolated
@@ -221,6 +224,141 @@ describe('Meeting files (e2e)', () => {
       .expect(400);
 
     expect(await prisma.meetingFile.count()).toBe(0);
+  });
+
+  describe('upload validation', () => {
+    /**
+     * Sparse: `Buffer.alloc(101 * 1024 * 1024)` would cost jest 101 MB of RAM, while a
+     * truncate-grown file costs almost nothing and streams the same over the wire.
+     */
+    const oversizedPath = join(tmpdir(), 'video-meetings-oversized.mp3');
+    const exactlyAtLimitPath = join(tmpdir(), 'video-meetings-at-limit.mp3');
+
+    async function sparseFile(path: string, bytes: number): Promise<void> {
+      const handle = await open(path, 'w');
+      await handle.truncate(bytes);
+      await handle.close();
+    }
+
+    beforeAll(async () => {
+      await sparseFile(oversizedPath, MAX_UPLOAD_BYTES + 1);
+      await sparseFile(exactlyAtLimitPath, MAX_UPLOAD_BYTES);
+    });
+
+    afterAll(async () => {
+      await rm(oversizedPath, { force: true });
+      await rm(exactlyAtLimitPath, { force: true });
+    });
+
+    it('rejects a file over the limit, naming the limit, and stores nothing', async () => {
+      const { token } = await registerUser();
+      const meetingId = await createMeeting(token);
+
+      const res = await request(app.getHttpServer())
+        .post(`/meetings/${meetingId}/files`)
+        .set('Authorization', `Bearer ${token}`)
+        .attach('file', oversizedPath, { contentType: 'audio/mpeg' })
+        .expect(413);
+
+      expect(res.body.message).toContain('100 МБ');
+      expect(await prisma.meetingFile.count()).toBe(0);
+      // multer streams to disk as it reads, so the partial file must be cleaned up too.
+      expect(await filesOnDisk()).toHaveLength(0);
+    }, 60_000);
+
+    it('accepts a file of exactly the limit, which the limit message promises', async () => {
+      const { token } = await registerUser();
+      const meetingId = await createMeeting(token);
+
+      // Busboy trips on *reaching* limits.fileSize, so passing the cap through verbatim
+      // would refuse this file while the 413 text claims 100 MB is allowed.
+      const res = await request(app.getHttpServer())
+        .post(`/meetings/${meetingId}/files`)
+        .set('Authorization', `Bearer ${token}`)
+        .attach('file', exactlyAtLimitPath, { contentType: 'audio/mpeg' })
+        .expect(201);
+
+      expect(res.body.data.size).toBe(MAX_UPLOAD_BYTES);
+    }, 60_000);
+
+    it('rejects an unsupported type, naming it, and stores nothing', async () => {
+      const { token } = await registerUser();
+      const meetingId = await createMeeting(token);
+
+      const res = await request(app.getHttpServer())
+        .post(`/meetings/${meetingId}/files`)
+        .set('Authorization', `Bearer ${token}`)
+        .attach('file', Buffer.from('MZ\x90\x00'), {
+          filename: 'malware.exe',
+          contentType: 'application/x-msdownload',
+        })
+        .expect(400);
+
+      expect(res.body.message).toContain('.exe');
+      expect(await prisma.meetingFile.count()).toBe(0);
+      expect(await filesOnDisk()).toHaveLength(0);
+    });
+
+    it('leaves previously uploaded files untouched after both rejections', async () => {
+      const { token } = await registerUser();
+      const meetingId = await createMeeting(token);
+      const existingId = await upload(token, meetingId, { filename: 'keep-me.mp3' });
+      const before = await filesOnDisk();
+
+      await request(app.getHttpServer())
+        .post(`/meetings/${meetingId}/files`)
+        .set('Authorization', `Bearer ${token}`)
+        .attach('file', oversizedPath, { contentType: 'audio/mpeg' })
+        .expect(413);
+
+      await request(app.getHttpServer())
+        .post(`/meetings/${meetingId}/files`)
+        .set('Authorization', `Bearer ${token}`)
+        .attach('file', Buffer.from('MZ'), {
+          filename: 'malware.exe',
+          contentType: 'application/x-msdownload',
+        })
+        .expect(400);
+
+      const list = await request(app.getHttpServer())
+        .get(`/meetings/${meetingId}/files`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+
+      expect(list.body.data).toHaveLength(1);
+      expect(list.body.data[0].id).toBe(existingId);
+      expect(list.body.data[0].originalName).toBe('keep-me.mp3');
+      expect(await filesOnDisk()).toEqual(before);
+
+      // Still intact, not merely still listed.
+      const res = await request(app.getHttpServer())
+        .get(`/meetings/${meetingId}/files/${existingId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .buffer()
+        .parse(binaryParser)
+        .expect(200);
+      expect((res.body as Buffer).equals(audio)).toBe(true);
+    }, 60_000);
+
+    it('accepts each supported format', async () => {
+      const { token } = await registerUser();
+      const meetingId = await createMeeting(token);
+
+      for (const [filename, contentType] of [
+        ['a.mp3', 'audio/mpeg'],
+        ['a.wav', 'audio/wav'],
+        ['a.m4a', 'audio/x-m4a'],
+        ['a.mp4', 'video/mp4'],
+      ]) {
+        await request(app.getHttpServer())
+          .post(`/meetings/${meetingId}/files`)
+          .set('Authorization', `Bearer ${token}`)
+          .attach('file', audio, { filename, contentType })
+          .expect(201);
+      }
+
+      expect(await prisma.meetingFile.count()).toBe(4);
+    });
   });
 
   describe('GET /meetings/:meetingId/files', () => {

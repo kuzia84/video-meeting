@@ -8,6 +8,7 @@ import { UPLOAD_DIR } from '../storage/storage.constants';
 import { CreateMeetingHandler } from './commands/handlers/create-meeting.handler';
 import { UploadMeetingFileHandler } from './commands/handlers/upload-meeting-file.handler';
 import { MeetingFilesController } from './meeting-files.controller';
+import { meetingFileFilter, MULTER_FILE_SIZE_LIMIT } from './meeting-file-validation';
 import { MeetingsController } from './meetings.controller';
 import { GetMeetingFileHandler } from './queries/handlers/get-meeting-file.handler';
 import { GetMeetingHandler } from './queries/handlers/get-meeting.handler';
@@ -27,7 +28,12 @@ import { ListMeetingsHandler } from './queries/handlers/list-meetings.handler';
           // originalname comes from the client and may carry `../` — the disk name is ours.
           filename: (_req, _file, cb) => cb(null, randomUUID()),
         }),
-        limits: { files: 1 },
+        fileFilter: meetingFileFilter,
+        // fileSize is what actually enforces the cap: it tears the stream down at the
+        // limit, whereas a ParseFilePipe validator would only run once all 101 MB are
+        // already written. See docs/meeting-file-upload-research.md. The value is one
+        // byte past the largest legal file on purpose — see MULTER_FILE_SIZE_LIMIT.
+        limits: { fileSize: MULTER_FILE_SIZE_LIMIT, files: 1 },
       }),
     }),
   ],
