@@ -1,17 +1,17 @@
 'use client';
 
-import { Button, buttonVariants, Card, Pagination } from '@heroui/react';
+import { buttonVariants, Card, Pagination } from '@heroui/react';
 import NextLink from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Logo } from '@/components/logo';
+import { AppHeader } from '@/components/app-header';
 import { ApiError, listMeetings, MEETINGS_PAGE_SIZE, type Meeting } from '@/lib/api/meetings';
 import { getAccessToken, getUserEmailFromToken, removeAccessToken } from '@/lib/auth/token';
 import { ELLIPSIS, paginationRange } from './pagination-range';
 
 type Status = 'loading' | 'ready' | 'error';
 
-/** Where the "create a meeting" actions lead. The page itself arrives in a later phase. */
+/** Where the "create a meeting" actions lead. */
 const CREATE_MEETING_HREF = '/meetings/new';
 
 const dateFormatter = new Intl.DateTimeFormat('ru-RU', {
@@ -132,11 +132,6 @@ export function HomeView() {
     void loadPage(1);
   }, [router, loadPage]);
 
-  function handleLogout() {
-    removeAccessToken();
-    router.replace('/login');
-  }
-
   const pageCount = Math.max(1, Math.ceil(total / MEETINGS_PAGE_SIZE));
   // The empty state carries its own invitation, so the page-level CTA stands down while
   // it is on screen: two identical primary buttons would compete for the same click.
@@ -154,17 +149,7 @@ export function HomeView() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="border-border border-b">
-        <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-4 p-4">
-          <span className="flex items-center gap-2 font-semibold tracking-tight">
-            <Logo className="size-7" />
-            MeetingBrain
-          </span>
-          <Button variant="outline" size="sm" onPress={handleLogout}>
-            Выйти
-          </Button>
-        </div>
-      </header>
+      <AppHeader />
 
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 p-4 py-8">
         <section className="flex flex-col gap-1">

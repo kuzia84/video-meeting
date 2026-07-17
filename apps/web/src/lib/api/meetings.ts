@@ -50,6 +50,22 @@ export async function listMeetings(page: number): Promise<MeetingsPage> {
   return { meetings: response.data, total: response.total, page: response.page };
 }
 
+export interface NewMeeting {
+  title: string;
+  description: string | null;
+  /** ISO 8601, as the API's @IsDateString expects. */
+  startTime: string;
+  endTime: string;
+}
+
+export function createMeeting(meeting: NewMeeting): Promise<Meeting> {
+  return fetchJson<Meeting>('/meetings', {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(meeting),
+  });
+}
+
 // A meeting the caller does not own answers 404 exactly like one that does not exist —
 // the API refuses to confirm it exists at all, so the page cannot tell the two apart
 // and must not try to.

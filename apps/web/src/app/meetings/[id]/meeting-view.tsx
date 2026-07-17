@@ -4,7 +4,7 @@ import { Button, buttonVariants } from '@heroui/react';
 import NextLink from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Logo } from '@/components/logo';
+import { AppHeader } from '@/components/app-header';
 import { ApiError, getMeeting, type Meeting } from '@/lib/api/meetings';
 import { getAccessToken, removeAccessToken } from '@/lib/auth/token';
 import { MeetingFiles } from './meeting-files';
@@ -21,22 +21,10 @@ const dateTimeFormatter = new Intl.DateTimeFormat('ru-RU', {
   minute: '2-digit',
 });
 
-function Shell({ children, onLogout }: { children: React.ReactNode; onLogout: () => void }) {
+function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col">
-      {/* Mirrors the home page's header, logout included: the control must not vanish
-          just because the user opened a meeting. */}
-      <header className="border-border border-b">
-        <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-4 p-4">
-          <NextLink href="/" className="flex items-center gap-2 font-semibold tracking-tight">
-            <Logo className="size-7" />
-            MeetingBrain
-          </NextLink>
-          <Button variant="outline" size="sm" onPress={onLogout}>
-            Выйти
-          </Button>
-        </div>
-      </header>
+      <AppHeader />
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 p-4 py-8">
         {children}
       </main>
@@ -49,11 +37,6 @@ export function MeetingView({ meetingId }: { meetingId: string }) {
   const [status, setStatus] = useState<Status>('loading');
   const [meeting, setMeeting] = useState<Meeting | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  function handleLogout() {
-    removeAccessToken();
-    router.replace('/login');
-  }
 
   // React Strict Mode runs effects twice in dev; guard the one-time auth check so it
   // doesn't fire (and redirect) twice.
@@ -104,7 +87,7 @@ export function MeetingView({ meetingId }: { meetingId: string }) {
 
   if (status === 'missing') {
     return (
-      <Shell onLogout={handleLogout}>
+      <Shell>
         <section className="flex flex-col items-center gap-3 py-12 text-center">
           <h1 className="text-2xl font-semibold tracking-tight">Встреча не найдена</h1>
           <p className="text-muted max-w-sm text-sm text-balance">
@@ -125,7 +108,7 @@ export function MeetingView({ meetingId }: { meetingId: string }) {
   // `{errorMessage}`.
   if (status === 'error' || !meeting) {
     return (
-      <Shell onLogout={handleLogout}>
+      <Shell>
         <section className="flex flex-col items-center gap-3 py-12 text-center">
           <h1 className="text-2xl font-semibold tracking-tight">Не удалось загрузить встречу</h1>
           <p className="text-danger max-w-sm text-sm text-balance" role="alert">
@@ -139,7 +122,7 @@ export function MeetingView({ meetingId }: { meetingId: string }) {
   }
 
   return (
-    <Shell onLogout={handleLogout}>
+    <Shell>
       <nav aria-label="Назад">
         <NextLink href="/" className="text-muted hover:text-foreground text-sm">
           ← К списку встреч
