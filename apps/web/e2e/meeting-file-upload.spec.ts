@@ -2,7 +2,7 @@ import { open, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
-import { createMeeting, registerUser, signIn } from './support';
+import { API_URL, createMeeting, registerUser, signIn, uploadFile } from './support';
 
 /** A file the browser sees as picked from disk, without touching the filesystem. */
 function fileOfSize(name: string, bytes: number, mimeType = 'audio/mpeg') {
@@ -95,6 +95,38 @@ test.describe('Meeting page — upload', () => {
     await expect(page.getByRole('listitem').filter({ hasText: 'big.mp3' })).toBeVisible({
       timeout: 60_000,
     });
+  });
+
+  test('does not pass one uploaded file off as the whole list when the list failed', async ({
+    page,
+    request,
+  }) => {
+    const user = await registerUser(request);
+    const meeting = await createMeeting(request, user.token);
+    // Two files already on the server that the page will fail to learn about.
+    await uploadFile(request, user.token, meeting.id, { name: 'existing-1.mp3' });
+    await uploadFile(request, user.token, meeting.id, { name: 'existing-2.mp3' });
+    await signIn(page, user);
+
+    // Fail the list once, then let it through.
+    let failList = true;
+    await page.route(`${API_URL}/meetings/*/files`, (route) => {
+      if (route.request().method() === 'GET' && failList) {
+        failList = false;
+        return route.abort('failed');
+      }
+      return route.continue();
+    });
+
+    await page.goto(`/meetings/${meeting.id}`);
+    await expect(page.getByRole('button', { name: 'Попробовать снова' })).toBeVisible();
+
+    await page.getByLabel('Загрузить файл').setInputFiles(fileOfSize('third.mp3', 1024));
+
+    // All three, not just the one that was uploaded from this page.
+    const items = page.getByRole('list', { name: 'Список файлов' }).getByRole('listitem');
+    await expect(items).toHaveCount(3);
+    await expect(items.last()).toContainText('third.mp3');
   });
 
   test('shows the API’s reason when the type is rejected', async ({ page, request }) => {

@@ -35,14 +35,24 @@ function authHeaders(): HeadersInit {
 export function uploadMeetingFile(
   meetingId: string,
   file: File,
-  { onProgress }: { onProgress?: (fraction: number) => void } = {},
+  { onProgress, signal }: { onProgress?: (fraction: number) => void; signal?: AbortSignal } = {},
 ): Promise<MeetingFile> {
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new Error('Загрузка отменена.'));
+      return;
+    }
+
     const form = new FormData();
     form.append('file', file);
 
     const xhr = new XMLHttpRequest();
     xhr.open('POST', apiUrl(`/meetings/${encodeURIComponent(meetingId)}/files`));
+
+    // Without this a 100 MB upload keeps going after the user has left the page.
+    const onAbortRequested = () => xhr.abort();
+    signal?.addEventListener('abort', onAbortRequested, { once: true });
+    xhr.onloadend = () => signal?.removeEventListener('abort', onAbortRequested);
 
     const token = getAccessToken();
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
