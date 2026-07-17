@@ -5,8 +5,15 @@ import NextLink from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppHeader } from '@/components/app-header';
-import { ApiError, getMeeting, updateMeeting, type Meeting } from '@/lib/api/meetings';
+import {
+  ApiError,
+  deleteMeeting,
+  getMeeting,
+  updateMeeting,
+  type Meeting,
+} from '@/lib/api/meetings';
 import { getAccessToken, removeAccessToken } from '@/lib/auth/token';
+import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { MeetingForm } from '@/components/meeting-form';
 import { MeetingFiles } from './meeting-files';
 
@@ -176,17 +183,43 @@ export function MeetingView({ meetingId }: { meetingId: string }) {
           <header className="flex flex-col gap-2">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <h1 className="text-2xl font-semibold tracking-tight">{meeting.title}</h1>
-              <Button
-                ref={editButtonRef}
-                variant="outline"
-                size="sm"
-                onPress={() => {
-                  setSavedNotice(false);
-                  setEditing(true);
-                }}
-              >
-                Редактировать
-              </Button>
+              <div className="flex shrink-0 items-center gap-2">
+                <Button
+                  ref={editButtonRef}
+                  variant="outline"
+                  size="sm"
+                  onPress={() => {
+                    setSavedNotice(false);
+                    setEditing(true);
+                  }}
+                >
+                  Редактировать
+                </Button>
+                <ConfirmDeleteDialog
+                  trigger={
+                    <Button variant="ghost" size="sm">
+                      Удалить встречу
+                    </Button>
+                  }
+                  heading="Удалить встречу?"
+                  body={
+                    <p>
+                      Встреча <strong>{meeting.title}</strong> и все её файлы будут удалены
+                      безвозвратно.
+                    </p>
+                  }
+                  // Not "Удалить встречу": that is the trigger's own name, and two
+                  // buttons answering to one name are two outcomes for one utterance.
+                  confirmLabel="Да, удалить"
+                  pendingLabel="Удаление…"
+                  onConfirm={async () => {
+                    await deleteMeeting(meeting.id);
+                    // Nothing left to show here, so leave the page rather than render a
+                    // meeting that no longer exists.
+                    router.push('/');
+                  }}
+                />
+              </div>
             </div>
             <p className="text-muted text-sm">
               <time dateTime={meeting.startTime}>

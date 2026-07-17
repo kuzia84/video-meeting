@@ -122,6 +122,22 @@ export async function fetchBlob(path: string, options?: RequestInit): Promise<Bl
   return res.blob();
 }
 
+/**
+ * For endpoints that answer 204: there is no body to parse, and `request()` would choke
+ * trying. Errors still come back as the same ApiError as everywhere else.
+ */
+export async function fetchVoid(path: string, options?: RequestInit): Promise<void> {
+  let res: Response;
+  try {
+    res = await fetch(apiUrl(path), options);
+  } catch {
+    throw new Error('Не удалось подключиться к серверу. Попробуйте ещё раз.');
+  }
+  if (!res.ok) {
+    throw apiErrorFromText(res.status, await res.text(), 'Не удалось выполнить запрос.');
+  }
+}
+
 export async function fetchPaginated<T>(
   path: string,
   options?: RequestInit,

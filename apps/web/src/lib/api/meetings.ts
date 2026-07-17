@@ -1,4 +1,4 @@
-import { fetchJson, fetchPaginated } from './client';
+import { fetchJson, fetchPaginated, fetchVoid } from './client';
 import { getAccessToken } from '@/lib/auth/token';
 import type { PaginatedResponse } from '@video-meetings/shared';
 
@@ -76,6 +76,14 @@ export function updateMeeting(id: string, changes: NewMeeting): Promise<Meeting>
     method: 'PATCH',
     headers: authHeaders(),
     body: JSON.stringify(changes),
+  });
+}
+
+/** 204, so there is no body to read back. */
+export async function deleteMeeting(id: string): Promise<void> {
+  await fetchVoid(`/meetings/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
   });
 }
 
