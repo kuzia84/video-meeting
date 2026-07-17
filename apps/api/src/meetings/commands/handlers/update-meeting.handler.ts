@@ -1,6 +1,6 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
-import { Meeting } from '@prisma/client';
+import { Meeting, Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { UpdateMeetingCommand } from '../update-meeting.command';
 
@@ -27,23 +27,42 @@ export class UpdateMeetingHandler implements ICommandHandler<UpdateMeetingComman
 
     const { title, description, startTime, endTime } = command.changes;
 
+    // Nothing to change: skip the write rather than round-tripping to Postgres to set
+    // every column to what it already holds.
+    if ([title, description, startTime, endTime].every((value) => value === undefined)) {
+      return existing;
+    }
+
+    // Presence, not truthiness: `undefined` is exactly Prisma's "leave this column
+    // alone" signal, which the update below relies on. Testing truthiness would lean on
+    // @IsDateString elsewhere rejecting '' to stay correct.
     // The rule is about the pair, so each side falls back to what is already stored:
     // moving only the end of a meeting still has to land after its existing start.
-    const nextStart = startTime ? new Date(startTime) : existing.startTime;
-    const nextEnd = endTime ? new Date(endTime) : existing.endTime;
+    const nextStart = startTime !== undefined ? new Date(startTime) : existing.startTime;
+    const nextEnd = endTime !== undefined ? new Date(endTime) : existing.endTime;
     if (nextEnd <= nextStart) {
       throw new BadRequestException('endTime must be after startTime');
     }
 
-    return this.prisma.meeting.update({
-      where: { id: existing.id },
-      data: {
-        // `undefined` tells Prisma to leave a column alone; `description: null` clears it.
-        title,
-        description,
-        startTime: startTime ? nextStart : undefined,
-        endTime: endTime ? nextEnd : undefined,
-      },
-    });
+    try {
+      return await this.prisma.meeting.update({
+        where: { id: existing.id },
+        data: {
+          // `undefined` leaves a column alone; `description: null` clears it.
+          title,
+          description,
+          startTime: startTime !== undefined ? nextStart : undefined,
+          endTime: endTime !== undefined ? nextEnd : undefined,
+        },
+      });
+    } catch (error) {
+      // The row can vanish between the read above and this write — a second tab deleting
+      // the meeting mid-edit. That is the same "not there" the read reports as 404, not
+      // a 500, which is what an unhandled Prisma error would become.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        throw new NotFoundException('Meeting not found');
+      }
+      throw error;
+    }
   }
 }

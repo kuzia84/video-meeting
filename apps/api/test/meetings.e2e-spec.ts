@@ -73,6 +73,15 @@ describe('Meetings (e2e)', () => {
       await request(app.getHttpServer()).post('/meetings').send(validMeeting()).expect(401);
     });
 
+    it('rejects a whitespace-only title with 400', async () => {
+      const { token } = await registerUser();
+      await request(app.getHttpServer())
+        .post('/meetings')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ ...validMeeting(), title: '   ' })
+        .expect(400);
+    });
+
     it('rejects a missing title with 400', async () => {
       const { token } = await registerUser();
       const { description, startTime, endTime } = validMeeting();
@@ -360,6 +369,43 @@ describe('Meetings (e2e)', () => {
         .set('Authorization', `Bearer ${token}`)
         .send({ startTime: 'not-a-date' })
         .expect(400);
+    });
+
+    it('rejects a whitespace-only title, which the length check alone would let through', async () => {
+      const { token } = await registerUser();
+      const meeting = await createOwnedMeeting(token);
+
+      await request(app.getHttpServer())
+        .patch(`/meetings/${meeting.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ title: '   ' })
+        .expect(400);
+    });
+
+    it('trims a padded title rather than storing the padding', async () => {
+      const { token } = await registerUser();
+      const meeting = await createOwnedMeeting(token);
+
+      const res = await request(app.getHttpServer())
+        .patch(`/meetings/${meeting.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ title: '  Ретро  ' })
+        .expect(200);
+
+      expect(res.body.data.title).toBe('Ретро');
+    });
+
+    it('accepts an empty body as a no-op', async () => {
+      const { token } = await registerUser();
+      const meeting = await createOwnedMeeting(token);
+
+      const res = await request(app.getHttpServer())
+        .patch(`/meetings/${meeting.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({})
+        .expect(200);
+
+      expect(res.body.data.title).toBe('Standup');
     });
 
     it('returns 404 for another user’s meeting and leaves it unchanged', async () => {

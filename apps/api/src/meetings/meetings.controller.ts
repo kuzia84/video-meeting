@@ -68,8 +68,16 @@ export class MeetingsController {
     @Param('id') id: string,
     @Body() dto: UpdateMeetingDto,
   ): Promise<ApiResponse<Meeting>> {
+    // Spelled out rather than passing `dto` through: a command is a plain value object,
+    // and handing the class-validator instance to the bus would drag the HTTP layer's
+    // shape into the handler. See «DTO ≠ Command» in docs/architecture/cqrs.md.
     const data = await this.commandBus.execute<UpdateMeetingCommand, Meeting>(
-      new UpdateMeetingCommand(user.userId, id, dto),
+      new UpdateMeetingCommand(user.userId, id, {
+        title: dto.title,
+        description: dto.description,
+        startTime: dto.startTime,
+        endTime: dto.endTime,
+      }),
     );
     return { success: true, message: 'Meeting updated', data };
   }
