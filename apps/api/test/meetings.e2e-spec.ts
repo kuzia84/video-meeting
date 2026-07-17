@@ -73,6 +73,15 @@ describe('Meetings (e2e)', () => {
       await request(app.getHttpServer()).post('/meetings').send(validMeeting()).expect(401);
     });
 
+    it('rejects a whitespace-only title with 400', async () => {
+      const { token } = await registerUser();
+      await request(app.getHttpServer())
+        .post('/meetings')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ ...validMeeting(), title: '   ' })
+        .expect(400);
+    });
+
     it('rejects a missing title with 400', async () => {
       const { token } = await registerUser();
       const { description, startTime, endTime } = validMeeting();
@@ -238,6 +247,209 @@ describe('Meetings (e2e)', () => {
       await request(app.getHttpServer())
         .get('/meetings/00000000-0000-0000-0000-000000000000')
         .expect(401);
+    });
+  });
+
+  describe('PATCH /meetings/:id', () => {
+    async function createOwnedMeeting(token: string) {
+      const res = await request(app.getHttpServer())
+        .post('/meetings')
+        .set('Authorization', `Bearer ${token}`)
+        .send(validMeeting())
+        .expect(201);
+      return res.body.data as { id: string };
+    }
+
+    it('updates title, description and times, returning them changed', async () => {
+      const { token } = await registerUser();
+      const meeting = await createOwnedMeeting(token);
+
+      const res = await request(app.getHttpServer())
+        .patch(`/meetings/${meeting.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          title: 'Ретроспектива',
+          description: 'Итоги спринта',
+          startTime: '2026-08-02T11:00:00.000Z',
+          endTime: '2026-08-02T12:00:00.000Z',
+        })
+        .expect(200);
+
+      expect(res.body.data.title).toBe('Ретроспектива');
+      expect(res.body.data.description).toBe('Итоги спринта');
+      expect(new Date(res.body.data.startTime).toISOString()).toBe('2026-08-02T11:00:00.000Z');
+      expect(new Date(res.body.data.endTime).toISOString()).toBe('2026-08-02T12:00:00.000Z');
+
+      // Persisted, not merely echoed back.
+      const reread = await request(app.getHttpServer())
+        .get(`/meetings/${meeting.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect(reread.body.data.title).toBe('Ретроспектива');
+    });
+
+    it('leaves omitted fields untouched', async () => {
+      const { token } = await registerUser();
+      const meeting = await createOwnedMeeting(token);
+
+      const res = await request(app.getHttpServer())
+        .patch(`/meetings/${meeting.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ title: 'Только название' })
+        .expect(200);
+
+      expect(res.body.data.title).toBe('Только название');
+      // The rest of the meeting is exactly as it was created.
+      expect(res.body.data.description).toBe('Daily sync');
+      expect(new Date(res.body.data.startTime).toISOString()).toBe('2026-08-01T10:00:00.000Z');
+      expect(new Date(res.body.data.endTime).toISOString()).toBe('2026-08-01T10:30:00.000Z');
+    });
+
+    it('clears the description when it is sent as null', async () => {
+      const { token } = await registerUser();
+      const meeting = await createOwnedMeeting(token);
+
+      const res = await request(app.getHttpServer())
+        .patch(`/meetings/${meeting.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ description: null })
+        .expect(200);
+
+      // Distinct from omitting it, which leaves the old text in place.
+      expect(res.body.data.description).toBeNull();
+    });
+
+    it('rejects a new end that lands before the stored start', async () => {
+      const { token } = await registerUser();
+      const meeting = await createOwnedMeeting(token);
+
+      // Only endTime is sent: the rule has to be checked against the start already
+      // stored, which no DTO-level rule could see.
+      await request(app.getHttpServer())
+        .patch(`/meetings/${meeting.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ endTime: '2026-08-01T09:00:00.000Z' })
+        .expect(400);
+
+      const reread = await request(app.getHttpServer())
+        .get(`/meetings/${meeting.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect(new Date(reread.body.data.endTime).toISOString()).toBe('2026-08-01T10:30:00.000Z');
+    });
+
+    it('rejects a new start that lands after the stored end', async () => {
+      const { token } = await registerUser();
+      const meeting = await createOwnedMeeting(token);
+
+      await request(app.getHttpServer())
+        .patch(`/meetings/${meeting.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ startTime: '2026-08-01T23:00:00.000Z' })
+        .expect(400);
+    });
+
+    it('rejects an empty title with 400', async () => {
+      const { token } = await registerUser();
+      const meeting = await createOwnedMeeting(token);
+
+      await request(app.getHttpServer())
+        .patch(`/meetings/${meeting.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ title: '' })
+        .expect(400);
+    });
+
+    it('rejects a non-date startTime with 400', async () => {
+      const { token } = await registerUser();
+      const meeting = await createOwnedMeeting(token);
+
+      await request(app.getHttpServer())
+        .patch(`/meetings/${meeting.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ startTime: 'not-a-date' })
+        .expect(400);
+    });
+
+    it('rejects a whitespace-only title, which the length check alone would let through', async () => {
+      const { token } = await registerUser();
+      const meeting = await createOwnedMeeting(token);
+
+      await request(app.getHttpServer())
+        .patch(`/meetings/${meeting.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ title: '   ' })
+        .expect(400);
+    });
+
+    it('trims a padded title rather than storing the padding', async () => {
+      const { token } = await registerUser();
+      const meeting = await createOwnedMeeting(token);
+
+      const res = await request(app.getHttpServer())
+        .patch(`/meetings/${meeting.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ title: '  Ретро  ' })
+        .expect(200);
+
+      expect(res.body.data.title).toBe('Ретро');
+    });
+
+    it('accepts an empty body as a no-op', async () => {
+      const { token } = await registerUser();
+      const meeting = await createOwnedMeeting(token);
+
+      const res = await request(app.getHttpServer())
+        .patch(`/meetings/${meeting.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({})
+        .expect(200);
+
+      expect(res.body.data.title).toBe('Standup');
+    });
+
+    it('returns 404 for another user’s meeting and leaves it unchanged', async () => {
+      const owner = await registerUser();
+      const stranger = await registerUser();
+      const meeting = await createOwnedMeeting(owner.token);
+
+      await request(app.getHttpServer())
+        .patch(`/meetings/${meeting.id}`)
+        .set('Authorization', `Bearer ${stranger.token}`)
+        .send({ title: 'Захвачено' })
+        .expect(404);
+
+      const reread = await request(app.getHttpServer())
+        .get(`/meetings/${meeting.id}`)
+        .set('Authorization', `Bearer ${owner.token}`)
+        .expect(200);
+      expect(reread.body.data.title).toBe('Standup');
+    });
+
+    it('returns 404 for a non-existent meeting, same as for another user’s', async () => {
+      const { token } = await registerUser();
+
+      await request(app.getHttpServer())
+        .patch('/meetings/00000000-0000-0000-0000-000000000000')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ title: 'Призрак' })
+        .expect(404);
+    });
+
+    it('rejects an unauthenticated request with 401 and changes nothing', async () => {
+      const { token } = await registerUser();
+      const meeting = await createOwnedMeeting(token);
+
+      await request(app.getHttpServer())
+        .patch(`/meetings/${meeting.id}`)
+        .send({ title: 'Аноним' })
+        .expect(401);
+
+      const reread = await request(app.getHttpServer())
+        .get(`/meetings/${meeting.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect(reread.body.data.title).toBe('Standup');
     });
   });
 });

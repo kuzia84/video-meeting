@@ -71,6 +71,7 @@ export class GetMeetingQuery {
 | Создать пользователя   | Command | `CreateUserCommand`        | `CreateUserHandler`        | — (внутр., из `RegisterHandler`)               |
 | Пользователь по email  | Query   | `GetUserByEmailQuery`      | `GetUserByEmailHandler`    | — (внутр., из `LoginHandler`)                  |
 | Создать встречу        | Command | `CreateMeetingCommand`     | `CreateMeetingHandler`     | `POST /meetings` (201)                         |
+| Изменить встречу       | Command | `UpdateMeetingCommand`     | `UpdateMeetingHandler`     | `PATCH /meetings/:id` (200)                    |
 | Список встреч          | Query   | `ListMeetingsQuery`        | `ListMeetingsHandler`      | `GET /meetings` (200)                          |
 | Одна встреча           | Query   | `GetMeetingQuery`          | `GetMeetingHandler`        | `GET /meetings/:id` (200)                      |
 | Загрузить файл встречи | Command | `UploadMeetingFileCommand` | `UploadMeetingFileHandler` | `POST /meetings/:meetingId/files` (201)        |
@@ -128,6 +129,7 @@ export class GetMeetingHandler implements IQueryHandler<GetMeetingQuery, Meeting
   controllers: [MeetingsController, MeetingFilesController],
   providers: [
     CreateMeetingHandler,
+    UpdateMeetingHandler,
     ListMeetingsHandler,
     GetMeetingHandler,
     UploadMeetingFileHandler,
