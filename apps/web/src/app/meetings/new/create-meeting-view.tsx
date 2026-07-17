@@ -14,7 +14,7 @@ import {
 import NextLink from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { Logo } from '@/components/logo';
+import { AppHeader } from '@/components/app-header';
 import { ApiError, createMeeting } from '@/lib/api/meetings';
 import { getAccessToken, removeAccessToken } from '@/lib/auth/token';
 
@@ -126,22 +126,9 @@ export function CreateMeetingView() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="border-border border-b">
-        <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-4 p-4">
-          <NextLink href="/" className="flex items-center gap-2 font-semibold tracking-tight">
-            <Logo className="size-7" />
-            MeetingBrain
-          </NextLink>
-        </div>
-      </header>
+      <AppHeader />
 
       <main className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-6 p-4 py-8">
-        <nav aria-label="Назад">
-          <NextLink href="/" className="text-muted hover:text-foreground text-sm">
-            ← К списку встреч
-          </NextLink>
-        </nav>
-
         <h1 className="text-2xl font-semibold tracking-tight">Новая встреча</h1>
 
         <Form
@@ -189,7 +176,13 @@ export function CreateMeetingView() {
             isRequired
             name="startTime"
             type="datetime-local"
-            onChange={() => clearFieldError('startTime')}
+            // Also clears endTime: "end before start" is about the pair, so correcting
+            // either side invalidates it — leaving it under a now-valid end time would be
+            // its own bug.
+            onChange={() => {
+              clearFieldError('startTime');
+              clearFieldError('endTime');
+            }}
           >
             <Label>Начало</Label>
             <Input className="h-11 md:h-10" />

@@ -126,6 +126,37 @@ test.describe('Create meeting', () => {
     await expect(page.getByRole('heading', { name: 'Исправленная' })).toBeVisible();
   });
 
+  test('the field error clears when the start time is corrected instead', async ({
+    page,
+    request,
+  }) => {
+    const user = await registerUser(request);
+    await signIn(page, user);
+    await page.goto('/meetings/new');
+
+    await page.getByLabel('Название').fill('Поправили начало');
+    await page.getByLabel('Начало').fill(END_LOCAL);
+    await page.getByLabel('Окончание').fill(START_LOCAL);
+    await page.getByRole('button', { name: 'Создать встречу' }).click();
+    await expect(page.getByText('Окончание должно быть позже начала')).toBeVisible();
+
+    // The error is about the pair, so fixing either side must clear it — not only the
+    // field it happens to be rendered under.
+    await page.getByLabel('Начало').fill('2026-08-01T08:00');
+
+    await expect(page.getByText('Окончание должно быть позже начала')).toHaveCount(0);
+  });
+
+  test('logs out from the create form', async ({ page, request }) => {
+    const user = await registerUser(request);
+    await signIn(page, user);
+    await page.goto('/meetings/new');
+
+    await page.getByRole('button', { name: 'Выйти' }).click();
+
+    await expect(page).toHaveURL('/login');
+  });
+
   test('sends an unauthenticated visitor to login', async ({ page }) => {
     await page.goto('/meetings/new');
 
