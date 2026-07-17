@@ -1,8 +1,10 @@
 import {
   BadRequestException,
   Controller,
+  Delete,
   Get,
   Header,
+  HttpCode,
   Param,
   Post,
   StreamableFile,
@@ -15,8 +17,11 @@ import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { MeetingFile } from '@prisma/client';
 import type { ApiResponse } from '@video-meetings/shared';
+import { AuthUser } from '../auth/auth.types';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { MeetingFileStorage } from '../storage/meeting-file-storage.service';
+import { DeleteMeetingFileCommand } from './commands/delete-meeting-file.command';
 import { UploadMeetingFileCommand } from './commands/upload-meeting-file.command';
 import { decodeOriginalName } from './decode-original-name';
 import { UploadSizeLimitFilter } from './filters/upload-size-limit.filter';
@@ -89,5 +94,20 @@ export class MeetingFilesController {
       // RFC 5987 form: a bare filename="…" is ASCII-only and would mangle a Cyrillic name.
       disposition: `attachment; filename*=UTF-8''${encodeURIComponent(file.originalName)}`,
     });
+  }
+
+  @Delete(':fileId')
+  // 204: nothing left to describe once the file is gone.
+  @HttpCode(204)
+  async remove(
+    @CurrentUser() user: AuthUser,
+    @Param('meetingId') meetingId: string,
+    @Param('fileId') fileId: string,
+  ): Promise<void> {
+    // MeetingOwnerGuard has already proved the meeting is this user's; the handler filters
+    // on the owner again so the command is safe wherever else it is dispatched from.
+    await this.commandBus.execute<DeleteMeetingFileCommand, void>(
+      new DeleteMeetingFileCommand(user.userId, meetingId, fileId),
+    );
   }
 }

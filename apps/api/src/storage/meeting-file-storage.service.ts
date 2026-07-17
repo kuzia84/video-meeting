@@ -45,4 +45,25 @@ export class MeetingFileStorage {
   async remove(storedName: string): Promise<void> {
     await unlink(this.pathFor(storedName)).catch(() => undefined);
   }
+
+  /**
+   * The one way anything is removed from disk — the upload handler's rollback, deleting
+   * a file, and deleting a whole meeting all come through here, so the rules about how
+   * that is done live in exactly one place.
+   *
+   * Best-effort per file and never throws: a file already gone is the end state we
+   * wanted, and one unreadable path must not strand the rest. Returns how many were
+   * actually unlinked so a caller can log a shortfall.
+   */
+  async removeAll(storedNames: readonly string[]): Promise<number> {
+    const results = await Promise.all(
+      storedNames.map((name) =>
+        unlink(this.pathFor(name)).then(
+          () => true,
+          () => false,
+        ),
+      ),
+    );
+    return results.filter(Boolean).length;
+  }
 }

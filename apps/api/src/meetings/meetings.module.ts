@@ -6,6 +6,8 @@ import { diskStorage } from 'multer';
 import { AuthModule } from '../auth/auth.module';
 import { UPLOAD_DIR } from '../storage/storage.constants';
 import { CreateMeetingHandler } from './commands/handlers/create-meeting.handler';
+import { DeleteMeetingFileHandler } from './commands/handlers/delete-meeting-file.handler';
+import { DeleteMeetingHandler } from './commands/handlers/delete-meeting.handler';
 import { UpdateMeetingHandler } from './commands/handlers/update-meeting.handler';
 import { UploadMeetingFileHandler } from './commands/handlers/upload-meeting-file.handler';
 import { MeetingFilesController } from './meeting-files.controller';
@@ -42,6 +44,8 @@ import { ListMeetingsHandler } from './queries/handlers/list-meetings.handler';
   providers: [
     CreateMeetingHandler,
     UpdateMeetingHandler,
+    DeleteMeetingHandler,
+    DeleteMeetingFileHandler,
     ListMeetingsHandler,
     GetMeetingHandler,
     UploadMeetingFileHandler,
