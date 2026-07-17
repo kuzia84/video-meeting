@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AppHeader } from '@/components/app-header';
 import { ApiError, createMeeting } from '@/lib/api/meetings';
 import { getAccessToken, removeAccessToken } from '@/lib/auth/token';
-import { MeetingForm } from '../meeting-form';
+import { MeetingForm } from '@/components/meeting-form';
 
 export function CreateMeetingView() {
   const router = useRouter();

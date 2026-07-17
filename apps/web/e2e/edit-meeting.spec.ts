@@ -104,4 +104,51 @@ test.describe('Edit meeting', () => {
     await page.reload();
     await expect(page.getByText('Описание не указано')).toBeVisible();
   });
+
+  test('keeps keyboard focus with the mode switch, and says when a save landed', async ({
+    page,
+    request,
+  }) => {
+    const user = await registerUser(request);
+    const meeting = await createMeeting(request, user.token);
+    await signIn(page, user);
+    await page.goto(`/meetings/${meeting.id}`);
+
+    await page.getByRole('button', { name: 'Редактировать' }).click();
+    // Focus follows the form in, rather than falling to <body> with the button that
+    // opened it.
+    await expect(page.getByLabel('Название')).toBeFocused();
+
+    await page.getByRole('button', { name: 'Отмена' }).click();
+    await expect(page.getByRole('button', { name: 'Редактировать' })).toBeFocused();
+
+    await page.getByRole('button', { name: 'Редактировать' }).click();
+    await page.getByLabel('Название').fill('Сохранено');
+    await page.getByRole('button', { name: 'Сохранить' }).click();
+
+    // A save and a cancel must not look identical.
+    await expect(page.getByText('Изменения сохранены')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Редактировать' })).toBeFocused();
+  });
+
+  test('a stale save failure clears once the user starts fixing it', async ({ page, request }) => {
+    const user = await registerUser(request);
+    const meeting = await createMeeting(request, user.token);
+    await signIn(page, user);
+    await page.goto(`/meetings/${meeting.id}`);
+    await page.getByRole('button', { name: 'Редактировать' }).click();
+
+    await page.route('**/meetings/*', (route) =>
+      route.request().method() === 'PATCH' ? route.abort('failed') : route.continue(),
+    );
+    await page.getByRole('button', { name: 'Сохранить' }).click();
+    // By text, not by role: Next ships its own route announcer with role="alert".
+    const failure = page.getByText(/Не удалось подключиться к серверу/);
+    await expect(failure).toBeVisible();
+
+    await page.getByLabel('Название').fill('Правлю дальше');
+
+    // The message described an attempt that no longer matches the fields.
+    await expect(failure).toHaveCount(0);
+  });
 });

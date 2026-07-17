@@ -7,7 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppHeader } from '@/components/app-header';
 import { ApiError, getMeeting, updateMeeting, type Meeting } from '@/lib/api/meetings';
 import { getAccessToken, removeAccessToken } from '@/lib/auth/token';
-import { MeetingForm } from '../meeting-form';
+import { MeetingForm } from '@/components/meeting-form';
 import { MeetingFiles } from './meeting-files';
 
 // 'missing' is its own state, not an error: a meeting that is not there is a normal
@@ -39,6 +39,10 @@ export function MeetingView({ meetingId }: { meetingId: string }) {
   const [meeting, setMeeting] = useState<Meeting | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isEditing, setEditing] = useState(false);
+  const [savedNotice, setSavedNotice] = useState(false);
+  // Focus is on the Редактировать button when it unmounts, so it must be put back by
+  // hand — otherwise it falls to <body> and the user restarts from the top of the page.
+  const editButtonRef = useRef<HTMLButtonElement>(null);
 
   // React Strict Mode runs effects twice in dev; guard the one-time auth check so it
   // doesn't fire (and redirect) twice.
@@ -139,13 +143,22 @@ export function MeetingView({ meetingId }: { meetingId: string }) {
             initial={meeting}
             submitLabel="Сохранить"
             pendingLabel="Сохранение…"
-            onCancel={() => setEditing(false)}
+            // The form replaces the button that had focus, so it takes focus with it.
+            autoFocus
+            onCancel={() => {
+              setEditing(false);
+              // Focus returns where it came from rather than falling to <body>.
+              requestAnimationFrame(() => editButtonRef.current?.focus());
+            }}
             onSubmit={async (values) => {
               try {
                 // The response is the updated row, so the page can show it without a
                 // second request.
                 setMeeting(await updateMeeting(meeting.id, values));
                 setEditing(false);
+                // Otherwise a save and a cancel look identical: the form just disappears.
+                setSavedNotice(true);
+                requestAnimationFrame(() => editButtonRef.current?.focus());
               } catch (err) {
                 if (err instanceof ApiError && err.status === 401) {
                   removeAccessToken();
@@ -163,7 +176,15 @@ export function MeetingView({ meetingId }: { meetingId: string }) {
           <header className="flex flex-col gap-2">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <h1 className="text-2xl font-semibold tracking-tight">{meeting.title}</h1>
-              <Button variant="outline" size="sm" onPress={() => setEditing(true)}>
+              <Button
+                ref={editButtonRef}
+                variant="outline"
+                size="sm"
+                onPress={() => {
+                  setSavedNotice(false);
+                  setEditing(true);
+                }}
+              >
                 Редактировать
               </Button>
             </div>
@@ -177,6 +198,12 @@ export function MeetingView({ meetingId }: { meetingId: string }) {
               </time>
             </p>
           </header>
+
+          {savedNotice ? (
+            <p className="text-success text-sm" role="status">
+              Изменения сохранены
+            </p>
+          ) : null}
 
           <section className="flex flex-col gap-2">
             <h2 className="text-sm font-medium">Описание</h2>
