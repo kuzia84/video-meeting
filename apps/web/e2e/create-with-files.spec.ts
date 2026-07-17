@@ -111,7 +111,9 @@ test.describe('Create meeting with files', () => {
     await page.getByLabel('Файлы записи').setInputFiles([fileOfSize('doomed.mp3', 1024)]);
     await page.getByRole('button', { name: 'Создать встречу' }).click();
 
-    await expect(page.getByText(/Встреча создана, но файл загрузить не удалось/)).toBeVisible();
+    // The meeting is real, so the message must say so — and name the file that failed.
+    await expect(page.getByText(/Встреча создана, но загрузка прервалась/)).toBeVisible();
+    await expect(page.getByText(/doomed\.mp3/)).toBeVisible();
     // Still on the form, not navigated away — and offered a way to the real meeting.
     await expect(page).toHaveURL('/meetings/new');
 
@@ -122,6 +124,28 @@ test.describe('Create meeting with files', () => {
 
     await page.getByRole('link', { name: 'Открыть встречу' }).click();
     await expect(page.getByRole('heading', { name: 'Встреча уцелела' })).toBeVisible();
+  });
+
+  test('names which file of several failed, and how many made it', async ({ page, request }) => {
+    const user = await registerUser(request);
+    await signIn(page, user);
+    await page.goto('/meetings/new');
+
+    await fillRequiredFields(page, 'Второй файл плохой');
+    await page
+      .getByLabel('Файлы записи')
+      .setInputFiles([
+        fileOfSize('good.mp3', 1024),
+        { name: 'bad.exe', mimeType: 'application/x-msdownload', buffer: Buffer.from('MZ') },
+        fileOfSize('never-started.mp3', 1024),
+      ]);
+    await page.getByRole('button', { name: 'Создать встречу' }).click();
+
+    // Which file, where in the queue, and what survived — otherwise the user opens the
+    // meeting to find one file of three and no idea what to retry.
+    await expect(page.getByText(/bad\.exe/)).toBeVisible();
+    await expect(page.getByText(/2 из 3/)).toBeVisible();
+    await expect(page.getByText(/Загружено файлов: 1 из 3/)).toBeVisible();
   });
 
   test('an upload rejected by the API reports the API’s reason', async ({ page, request }) => {

@@ -45,6 +45,23 @@ export function apiErrorFrom(status: number, body: unknown, fallback: string): A
   return new ApiError(status, messages, errorBody.field);
 }
 
+/**
+ * The one place a request leaves this app: resolves the URL and turns a dead connection
+ * into a message a person can read. Every transport below builds on it — the alternative
+ * was each re-deriving both, which is how three copies of this preamble accumulated one
+ * endpoint kind at a time.
+ *
+ * Returns the raw Response: what to do with a body is the caller's business, and that is
+ * the only thing the transports actually differ in.
+ */
+async function send(path: string, options?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(apiUrl(path), options);
+  } catch {
+    throw new Error('Не удалось подключиться к серверу. Попробуйте ещё раз.');
+  }
+}
+
 /** Parses an error body that may not be JSON at all (a proxy's HTML 502, an empty body). */
 export function apiErrorFromText(status: number, text: string, fallback: string): ApiError {
   try {
@@ -58,15 +75,11 @@ export function apiErrorFromText(status: number, text: string, fallback: string)
 // a non-2xx response. Returns the raw success envelope (unknown) so callers can
 // pull just `data` (fetchJson) or the full paginated envelope (fetchPaginated).
 async function request(path: string, options?: RequestInit): Promise<unknown> {
-  let res: Response;
-  try {
-    res = await fetch(`${API_URL}${path}`, {
-      headers: { 'Content-Type': 'application/json' },
-      ...options,
-    });
-  } catch {
-    throw new Error('Не удалось подключиться к серверу. Попробуйте ещё раз.');
-  }
+
+  const res = await send(path, {
+    headers: { 'Content-Type': 'application/json' },
+    ...options,
+  });
 
   let body: unknown;
   try {
@@ -103,12 +116,7 @@ export async function fetchJson<T>(path: string, options?: RequestInit): Promise
  * exactly what must not happen to a 100 MB recording.
  */
 export async function fetchBlob(path: string, options?: RequestInit): Promise<Blob> {
-  let res: Response;
-  try {
-    res = await fetch(`${API_URL}${path}`, options);
-  } catch {
-    throw new Error('Не удалось подключиться к серверу. Попробуйте ещё раз.');
-  }
+  const res = await send(path, options);
 
   if (!res.ok) {
     // Errors stay JSON even on this route; a non-JSON body falls back to the message.
@@ -127,12 +135,7 @@ export async function fetchBlob(path: string, options?: RequestInit): Promise<Bl
  * trying. Errors still come back as the same ApiError as everywhere else.
  */
 export async function fetchVoid(path: string, options?: RequestInit): Promise<void> {
-  let res: Response;
-  try {
-    res = await fetch(apiUrl(path), options);
-  } catch {
-    throw new Error('Не удалось подключиться к серверу. Попробуйте ещё раз.');
-  }
+  const res = await send(path, options);
   if (!res.ok) {
     throw apiErrorFromText(res.status, await res.text(), 'Не удалось выполнить запрос.');
   }

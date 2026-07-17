@@ -14,6 +14,9 @@ import { getAccessToken, removeAccessToken } from '@/lib/auth/token';
 interface PartialFailure {
   meetingId: string;
   message: string;
+  /** How many files made it before the failure — the rest never started. */
+  uploaded: number;
+  total: number;
 }
 
 export function CreateMeetingView() {
@@ -26,6 +29,10 @@ export function CreateMeetingView() {
   );
   const [partialFailure, setPartialFailure] = useState<PartialFailure | null>(null);
   const startedRef = useRef(false);
+  const uploadAbortRef = useRef<AbortController | null>(null);
+
+  // Leaving mid-upload must not keep pushing the file at a page that is gone.
+  useEffect(() => () => uploadAbortRef.current?.abort(), []);
 
   useEffect(() => {
     if (startedRef.current) return;
@@ -61,7 +68,10 @@ export function CreateMeetingView() {
         {partialFailure ? (
           <div className="border-danger/40 flex flex-col items-start gap-3 rounded-xl border p-4">
             <p className="text-danger text-sm" role="alert">
-              Встреча создана, но файл загрузить не удалось: {partialFailure.message}
+              Встреча создана, но загрузка прервалась на файле {partialFailure.message}
+              {partialFailure.uploaded > 0
+                ? ` Загружено файлов: ${partialFailure.uploaded} из ${partialFailure.total}.`
+                : ''}
             </p>
             <NextLink
               className={buttonVariants({ variant: 'outline', size: 'sm' })}
@@ -94,12 +104,20 @@ export function CreateMeetingView() {
             // Files can only be uploaded against an existing meeting, so this is the one
             // order available: create, then upload. Everything past this point has to
             // keep the created meeting reachable, because it is already real.
+            //
+            // Serially, not in parallel: it is what makes the progress bar's
+            // (done + fraction) / total mean anything, and what lets the first failure
+            // stop the rest. The cost is wall-clock on multi-file picks.
+            uploadAbortRef.current = new AbortController();
             for (const [index, file] of files.entries()) {
               try {
                 setUpload({ done: index, total: files.length, fraction: 0 });
                 await uploadMeetingFile(created.id, file, {
                   onProgress: (fraction) =>
                     setUpload({ done: index, total: files.length, fraction }),
+                  // Without this, leaving mid-upload keeps pushing the whole file at a
+                  // page that is gone — the meeting-page uploader already aborts.
+                  signal: uploadAbortRef.current.signal,
                 });
               } catch (err) {
                 setUpload(null);
@@ -107,7 +125,13 @@ export function CreateMeetingView() {
                 // read as "the meeting was not created", which is the opposite of true.
                 setPartialFailure({
                   meetingId: created.id,
-                  message: err instanceof Error ? err.message : 'Попробуйте ещё раз.',
+                  // Names the file and how far the queue got: "не удалось загрузить файл"
+                  // leaves a three-file pick guessing which one and what survived.
+                  message: `«${file.name}» (${index + 1} из ${files.length}) — ${
+                    err instanceof Error ? err.message : 'попробуйте ещё раз.'
+                  }`,
+                  uploaded: index,
+                  total: files.length,
                 });
                 return;
               }
