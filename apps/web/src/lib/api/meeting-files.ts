@@ -1,4 +1,4 @@
-import { fetchBlob, fetchJson } from './client';
+import { apiErrorFromText, apiUrl, fetchBlob, fetchJson } from './client';
 import { getAccessToken } from '@/lib/auth/token';
 
 export { ApiError } from './client';
@@ -17,6 +17,75 @@ export interface MeetingFile {
 function authHeaders(): HeadersInit {
   const token = getAccessToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+/**
+ * Uploads one file, reporting how much of it has actually gone out.
+ *
+ * XMLHttpRequest, not fetch — and not by preference: `fetch` has no upload progress
+ * events at all (only download). The streaming workaround (`ReadableStream` body with
+ * `duplex: 'half'`) needs HTTP/2 and is unsupported in Safari and Firefox. So this is
+ * the one call in the app that cannot use the shared fetch wrapper; base-URL resolution
+ * and ApiError mapping still come from client.ts rather than being re-derived here.
+ *
+ * Content-Type is deliberately never set: the browser must write it itself, because only
+ * it knows the multipart boundary. Setting it by hand produces a body the server cannot
+ * parse.
+ */
+export function uploadMeetingFile(
+  meetingId: string,
+  file: File,
+  { onProgress, signal }: { onProgress?: (fraction: number) => void; signal?: AbortSignal } = {},
+): Promise<MeetingFile> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new Error('Загрузка отменена.'));
+      return;
+    }
+
+    const form = new FormData();
+    form.append('file', file);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', apiUrl(`/meetings/${encodeURIComponent(meetingId)}/files`));
+
+    // Without this a 100 MB upload keeps going after the user has left the page.
+    const onAbortRequested = () => xhr.abort();
+    signal?.addEventListener('abort', onAbortRequested, { once: true });
+    xhr.onloadend = () => signal?.removeEventListener('abort', onAbortRequested);
+
+    const token = getAccessToken();
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+
+    xhr.upload.onprogress = (event) => {
+      // lengthComputable is false when the total is unknown; reporting a fraction of an
+      // unknown total would be a made-up number.
+      if (event.lengthComputable && event.total > 0) {
+        onProgress?.(event.loaded / event.total);
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const body = JSON.parse(xhr.responseText) as { data?: MeetingFile };
+          if (!body.data) throw new Error('no data');
+          resolve(body.data);
+        } catch {
+          reject(new Error('Сервер вернул некорректный ответ. Попробуйте ещё раз.'));
+        }
+        return;
+      }
+      // The rejection reason the user must see (the 100 MB limit, the allowed types)
+      // lives in this body — the PRD requires showing it verbatim.
+      reject(apiErrorFromText(xhr.status, xhr.responseText, 'Не удалось загрузить файл.'));
+    };
+
+    xhr.onerror = () => reject(new Error('Не удалось подключиться к серверу. Попробуйте ещё раз.'));
+    xhr.onabort = () => reject(new Error('Загрузка отменена.'));
+
+    xhr.send(form);
+  });
 }
 
 export function listMeetingFiles(meetingId: string): Promise<MeetingFile[]> {
