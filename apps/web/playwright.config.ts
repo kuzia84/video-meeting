@@ -14,6 +14,10 @@ const API_URL = 'http://localhost:3001';
  */
 export default defineConfig({
   testDir: './e2e',
+  // These tests write to the *dev* database (they drive the dev server, which reads its
+  // own .env), so unlike the API's e2e they cannot be handed their own. They clean up
+  // after themselves instead — including the uploads, which no cascade would remove.
+  globalTeardown: './e2e/global-teardown.ts',
   // The API serializes writes against one database; parallel workers would race
   // on shared state for no real gain at this suite's size.
   workers: 1,
