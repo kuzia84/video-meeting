@@ -5,8 +5,9 @@ import NextLink from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppHeader } from '@/components/app-header';
-import { ApiError, getMeeting, type Meeting } from '@/lib/api/meetings';
+import { ApiError, getMeeting, updateMeeting, type Meeting } from '@/lib/api/meetings';
 import { getAccessToken, removeAccessToken } from '@/lib/auth/token';
+import { MeetingForm } from '../meeting-form';
 import { MeetingFiles } from './meeting-files';
 
 // 'missing' is its own state, not an error: a meeting that is not there is a normal
@@ -37,6 +38,7 @@ export function MeetingView({ meetingId }: { meetingId: string }) {
   const [status, setStatus] = useState<Status>('loading');
   const [meeting, setMeeting] = useState<Meeting | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isEditing, setEditing] = useState(false);
 
   // React Strict Mode runs effects twice in dev; guard the one-time auth check so it
   // doesn't fire (and redirect) twice.
@@ -129,29 +131,63 @@ export function MeetingView({ meetingId }: { meetingId: string }) {
         </NextLink>
       </nav>
 
-      <article className="flex flex-col gap-6">
-        <header className="flex flex-col gap-2">
-          <h1 className="text-2xl font-semibold tracking-tight">{meeting.title}</h1>
-          <p className="text-muted text-sm">
-            <time dateTime={meeting.startTime}>
-              {dateTimeFormatter.format(new Date(meeting.startTime))}
-            </time>
-            {' — '}
-            <time dateTime={meeting.endTime}>
-              {dateTimeFormatter.format(new Date(meeting.endTime))}
-            </time>
-          </p>
-        </header>
-
-        <section className="flex flex-col gap-2">
-          <h2 className="text-sm font-medium">Описание</h2>
-          {meeting.description ? (
-            <p className="whitespace-pre-wrap">{meeting.description}</p>
-          ) : (
-            <p className="text-muted text-sm">Описание не указано</p>
-          )}
+      {isEditing ? (
+        <section className="flex flex-col gap-4">
+          <h1 className="text-2xl font-semibold tracking-tight">Редактирование встречи</h1>
+          <MeetingForm
+            // Pre-filled with what is on screen, so the form starts from the truth.
+            initial={meeting}
+            submitLabel="Сохранить"
+            pendingLabel="Сохранение…"
+            onCancel={() => setEditing(false)}
+            onSubmit={async (values) => {
+              try {
+                // The response is the updated row, so the page can show it without a
+                // second request.
+                setMeeting(await updateMeeting(meeting.id, values));
+                setEditing(false);
+              } catch (err) {
+                if (err instanceof ApiError && err.status === 401) {
+                  removeAccessToken();
+                  router.replace('/login');
+                  return;
+                }
+                // Rethrown so the form reports it above the fields.
+                throw err;
+              }
+            }}
+          />
         </section>
-      </article>
+      ) : (
+        <article className="flex flex-col gap-6">
+          <header className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <h1 className="text-2xl font-semibold tracking-tight">{meeting.title}</h1>
+              <Button variant="outline" size="sm" onPress={() => setEditing(true)}>
+                Редактировать
+              </Button>
+            </div>
+            <p className="text-muted text-sm">
+              <time dateTime={meeting.startTime}>
+                {dateTimeFormatter.format(new Date(meeting.startTime))}
+              </time>
+              {' — '}
+              <time dateTime={meeting.endTime}>
+                {dateTimeFormatter.format(new Date(meeting.endTime))}
+              </time>
+            </p>
+          </header>
+
+          <section className="flex flex-col gap-2">
+            <h2 className="text-sm font-medium">Описание</h2>
+            {meeting.description ? (
+              <p className="whitespace-pre-wrap">{meeting.description}</p>
+            ) : (
+              <p className="text-muted text-sm">Описание не указано</p>
+            )}
+          </section>
+        </article>
+      )}
 
       {/* Rendered only once the meeting itself resolved: on a 404 there is no meeting to
           hang files off, and asking for its files would just be a second 404. */}

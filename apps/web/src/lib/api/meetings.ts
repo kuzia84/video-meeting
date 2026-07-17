@@ -66,6 +66,19 @@ export function createMeeting(meeting: NewMeeting): Promise<Meeting> {
   });
 }
 
+/**
+ * PATCH: only the fields sent are changed. `description: null` clears it, which is why
+ * this takes the same shape as create rather than a partial of it — the form always has
+ * every field, so it always sends every field.
+ */
+export function updateMeeting(id: string, changes: NewMeeting): Promise<Meeting> {
+  return fetchJson<Meeting>(`/meetings/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify(changes),
+  });
+}
+
 // A meeting the caller does not own answers 404 exactly like one that does not exist —
 // the API refuses to confirm it exists at all, so the page cannot tell the two apart
 // and must not try to.
