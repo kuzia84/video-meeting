@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import { Meeting } from '@prisma/client';
 import type { ApiResponse, PaginatedResponse } from '@video-meetings/shared';
@@ -6,8 +6,10 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AuthUser } from '../auth/auth.types';
 import { CreateMeetingCommand } from './commands/create-meeting.command';
+import { UpdateMeetingCommand } from './commands/update-meeting.command';
 import { CreateMeetingDto } from './dto/create-meeting.dto';
 import { ListMeetingsDto } from './dto/list-meetings.dto';
+import { UpdateMeetingDto } from './dto/update-meeting.dto';
 import { GetMeetingQuery } from './queries/get-meeting.query';
 import { ListMeetingsQuery } from './queries/list-meetings.query';
 import { ListMeetingsResult } from './queries/handlers/list-meetings.handler';
@@ -58,5 +60,17 @@ export class MeetingsController {
       new GetMeetingQuery(user.userId, id),
     );
     return { success: true, message: 'Meeting', data };
+  }
+
+  @Patch(':id')
+  async update(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateMeetingDto,
+  ): Promise<ApiResponse<Meeting>> {
+    const data = await this.commandBus.execute<UpdateMeetingCommand, Meeting>(
+      new UpdateMeetingCommand(user.userId, id, dto),
+    );
+    return { success: true, message: 'Meeting updated', data };
   }
 }
