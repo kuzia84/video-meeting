@@ -1,6 +1,12 @@
 import { readdir, stat, unlink } from 'node:fs/promises';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 import { PrismaClient } from '@prisma/client';
+import { config as loadDotenv } from 'dotenv';
+
+// Loaded explicitly: PrismaClient reads .env by itself, so the database half of this
+// script would honour configuration while the disk half silently ignored UPLOAD_DIR and
+// cleaned the default directory instead.
+loadDotenv();
 
 /**
  * Reclaims what test runs leave in the *dev* database and upload directory.
@@ -31,9 +37,11 @@ const E2E_EMAIL_PREFIX = 'e2e-';
  */
 const ORPHAN_MIN_AGE_MS = 60 * 60 * 1000;
 
+/** Mirrors `resolveUploadDir` in src/storage/storage.module.ts — the app's own rule. */
 function uploadDir(): string {
   const configured = process.env.UPLOAD_DIR?.trim();
-  return configured ? join(process.cwd(), configured) : join(process.cwd(), 'uploads');
+  if (!configured) return join(process.cwd(), 'uploads');
+  return isAbsolute(configured) ? configured : join(process.cwd(), configured);
 }
 
 /** Deletes the e2e accounts, taking their bytes with them — the cascade would not. */

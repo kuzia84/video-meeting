@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { join } from 'node:path';
 
 /**
  * Clears what this suite leaves in the dev database, after the whole run.
@@ -17,7 +18,11 @@ import { execFileSync } from 'node:child_process';
 export default function globalTeardown(): void {
   try {
     const output = execFileSync('npm', ['run', 'db:clean-e2e', '-w', '@video-meetings/api'], {
-      cwd: '../..',
+      // Anchored to this file, not to process.cwd(): a run started from the repo root
+      // (`npx playwright test --config apps/web/playwright.config.ts`) would otherwise
+      // resolve '../..' to two levels above the repo, and the catch below would turn
+      // that into a warning on a green run that cleaned nothing.
+      cwd: join(__dirname, '..', '..', '..'),
       encoding: 'utf8',
       stdio: 'pipe',
       shell: process.platform === 'win32',

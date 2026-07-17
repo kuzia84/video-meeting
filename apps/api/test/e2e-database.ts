@@ -44,7 +44,17 @@ export function resolveE2eDatabaseUrl(): string {
  */
 export function assertE2eDatabase(): void {
   const url = process.env.DATABASE_URL ?? '';
-  if (!url.endsWith(E2E_DATABASE_SUFFIX)) {
+  // Read the name the same way `toE2eDatabaseUrl` writes it. Matching on the whole string
+  // would disagree with it the moment the URL carries `?schema=public` or any other
+  // ordinary Prisma parameter — refusing to run against the database it just derived.
+  let databaseName: string;
+  try {
+    databaseName = e2eDatabaseName(url);
+  } catch {
+    databaseName = '';
+  }
+
+  if (!databaseName.endsWith(E2E_DATABASE_SUFFIX)) {
     throw new Error(
       `Refusing to run: DATABASE_URL points at "${url || '(unset)'}", not the e2e database ` +
         `(expected a name ending in "${E2E_DATABASE_SUFFIX}"). This suite deletes every user ` +
