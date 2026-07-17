@@ -1,8 +1,13 @@
 'use client';
 
-import { Button } from '@heroui/react';
+import { Button, buttonVariants, ProgressBar } from '@heroui/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { downloadMeetingFile, listMeetingFiles, type MeetingFile } from '@/lib/api/meeting-files';
+import {
+  downloadMeetingFile,
+  listMeetingFiles,
+  uploadMeetingFile,
+  type MeetingFile,
+} from '@/lib/api/meeting-files';
 import { formatFileSize } from './format-file-size';
 
 type Status = 'loading' | 'ready' | 'error';
@@ -38,6 +43,12 @@ export function MeetingFiles({ meetingId }: { meetingId: string }) {
   // A Set, not one id: two downloads can be in flight, and a single value would let the
   // first to finish re-enable the other's button while it is still fetching.
   const [downloadingIds, setDownloadingIds] = useState<ReadonlySet<string>>(new Set());
+
+  // null when nothing is uploading; 0..1 while it is. A separate flag would let the two
+  // disagree about whether an upload is in progress.
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Strict Mode runs effects twice in dev; the fetch is idempotent, but the guard keeps
   // the request count honest.
@@ -88,9 +99,76 @@ export function MeetingFiles({ meetingId }: { meetingId: string }) {
     }
   }
 
+  async function handleUpload(file: File) {
+    setUploadError(null);
+    setUploadProgress(0);
+    try {
+      const created = await uploadMeetingFile(meetingId, file, {
+        onProgress: setUploadProgress,
+      });
+      // Prepended from the response rather than re-fetching the list: the API already
+      // returned the created row, and the list is ordered oldest-first, so the new file
+      // belongs at the end.
+      setFiles((current) => [...current, created]);
+      setStatus('ready');
+    } catch (err) {
+      // The reason (the 100 MB limit, the allowed types) comes from the API and is shown
+      // verbatim — the PRD asks for the cause, not a generic failure.
+      setUploadError(err instanceof Error ? err.message : 'Не удалось загрузить файл.');
+    } finally {
+      setUploadProgress(null);
+      // Cleared so picking the same file again still fires a change event.
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
+  const isUploading = uploadProgress !== null;
+
   return (
     <section className="flex flex-col gap-4">
-      <h2 className="text-lg font-semibold tracking-tight">Файлы</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold tracking-tight">Файлы</h2>
+
+        {/* A plain file input, styled as a button via the label: the native control's
+            look cannot be restyled reliably, and a fake button that opens a hidden input
+            loses keyboard access unless it is wired back up by hand. */}
+        <label className={buttonVariants({ size: 'sm' })}>
+          {isUploading ? 'Загрузка…' : 'Загрузить файл'}
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="sr-only"
+            // Hints the OS picker; the API is what actually enforces this.
+            accept=".mp3,.wav,.m4a,.mp4,audio/*,video/mp4"
+            disabled={isUploading}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void handleUpload(file);
+            }}
+          />
+        </label>
+      </div>
+
+      {isUploading ? (
+        <ProgressBar
+          aria-label="Загрузка файла"
+          // Real bytes on the wire, not a fake animation: the value comes from XHR's
+          // upload progress events.
+          value={Math.round(uploadProgress * 100)}
+          className="w-full"
+        >
+          <ProgressBar.Output />
+          <ProgressBar.Track>
+            <ProgressBar.Fill />
+          </ProgressBar.Track>
+        </ProgressBar>
+      ) : null}
+
+      {uploadError ? (
+        <p className="text-danger text-sm" role="alert">
+          {uploadError}
+        </p>
+      ) : null}
 
       {status === 'loading' ? <p className="text-muted text-sm">Загрузка файлов…</p> : null}
 

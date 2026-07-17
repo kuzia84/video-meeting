@@ -17,6 +17,12 @@ export class ApiError extends Error {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
+/** For callers that cannot go through `fetch` at all — see `uploadMeetingFile`, which
+ *  needs XMLHttpRequest for upload progress. Base-URL resolution stays owned here. */
+export function apiUrl(path: string): string {
+  return `${API_URL}${path}`;
+}
+
 interface ErrorBody {
   message?: string | string[];
   field?: string;
@@ -24,6 +30,28 @@ interface ErrorBody {
 
 interface SuccessBody {
   data?: unknown;
+}
+
+/**
+ * Turns an API error response into an ApiError, normalizing the two shapes the API
+ * produces: a `string[]` from ValidationPipe 400s and a plain `string` from hand-thrown
+ * exceptions. The one place that knows this mapping — every transport (fetch, blob,
+ * XHR) funnels through it so a 401 means the same thing whichever one made the call.
+ */
+export function apiErrorFrom(status: number, body: unknown, fallback: string): ApiError {
+  const errorBody = (body ?? {}) as ErrorBody;
+  const raw = errorBody.message;
+  const messages = Array.isArray(raw) ? raw : raw ? [raw] : [fallback];
+  return new ApiError(status, messages, errorBody.field);
+}
+
+/** Parses an error body that may not be JSON at all (a proxy's HTML 502, an empty body). */
+export function apiErrorFromText(status: number, text: string, fallback: string): ApiError {
+  try {
+    return apiErrorFrom(status, JSON.parse(text), fallback);
+  } catch {
+    return new ApiError(status, [fallback]);
+  }
 }
 
 // Core request: performs the fetch, guards JSON parsing, and throws ApiError on
@@ -48,11 +76,7 @@ async function request(path: string, options?: RequestInit): Promise<unknown> {
   }
 
   if (!res.ok) {
-    const errorBody = body as ErrorBody;
-    const messages = Array.isArray(errorBody.message)
-      ? errorBody.message
-      : [errorBody.message ?? 'Unknown error'];
-    throw new ApiError(res.status, messages, errorBody.field);
+    throw apiErrorFrom(res.status, body, 'Unknown error');
   }
 
   return body;
@@ -87,17 +111,12 @@ export async function fetchBlob(path: string, options?: RequestInit): Promise<Bl
   }
 
   if (!res.ok) {
-    // Errors stay JSON even on this route, so the shape below matches every other call.
-    let messages = ['Не удалось скачать файл. Попробуйте ещё раз.'];
-    try {
-      const body = (await res.json()) as ErrorBody;
-      if (body.message) {
-        messages = Array.isArray(body.message) ? body.message : [body.message];
-      }
-    } catch {
-      // Non-JSON error body: keep the fallback above rather than throwing over it.
-    }
-    throw new ApiError(res.status, messages);
+    // Errors stay JSON even on this route; a non-JSON body falls back to the message.
+    throw apiErrorFromText(
+      res.status,
+      await res.text(),
+      'Не удалось скачать файл. Попробуйте ещё раз.',
+    );
   }
 
   return res.blob();
