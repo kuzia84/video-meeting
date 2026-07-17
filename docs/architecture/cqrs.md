@@ -72,6 +72,8 @@ export class GetMeetingQuery {
 | Пользователь по email  | Query   | `GetUserByEmailQuery`      | `GetUserByEmailHandler`    | — (внутр., из `LoginHandler`)                  |
 | Создать встречу        | Command | `CreateMeetingCommand`     | `CreateMeetingHandler`     | `POST /meetings` (201)                         |
 | Изменить встречу       | Command | `UpdateMeetingCommand`     | `UpdateMeetingHandler`     | `PATCH /meetings/:id` (200)                    |
+| Удалить встречу        | Command | `DeleteMeetingCommand`     | `DeleteMeetingHandler`     | `DELETE /meetings/:id` (204)                   |
+| Удалить файл встречи   | Command | `DeleteMeetingFileCommand` | `DeleteMeetingFileHandler` | `DELETE /meetings/:meetingId/files/:fileId` (204) |
 | Список встреч          | Query   | `ListMeetingsQuery`        | `ListMeetingsHandler`      | `GET /meetings` (200)                          |
 | Одна встреча           | Query   | `GetMeetingQuery`          | `GetMeetingHandler`        | `GET /meetings/:id` (200)                      |
 | Загрузить файл встречи | Command | `UploadMeetingFileCommand` | `UploadMeetingFileHandler` | `POST /meetings/:meetingId/files` (201)        |

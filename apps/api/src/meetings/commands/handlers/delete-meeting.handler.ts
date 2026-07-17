@@ -1,4 +1,5 @@
 import { Logger, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { MeetingFileStorage } from '../../../storage/meeting-file-storage.service';
@@ -31,7 +32,15 @@ export class DeleteMeetingHandler implements ICommandHandler<DeleteMeetingComman
 
     // Rows first, then bytes — same order as deleting a single file, and for the same
     // reason: a failure here should cost disk space, not leave rows pointing at nothing.
-    await this.prisma.meeting.delete({ where: { id: meeting.id } });
+    try {
+      await this.prisma.meeting.delete({ where: { id: meeting.id } });
+    } catch (error) {
+      // Already gone between the read and here — a double-clicked confirm, a second tab.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        throw new NotFoundException('Meeting not found');
+      }
+      throw error;
+    }
 
     const storedNames = meeting.files.map((file) => file.storedName);
     const removed = await this.storage.removeAll(storedNames);

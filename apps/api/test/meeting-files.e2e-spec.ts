@@ -474,6 +474,32 @@ describe('Meeting files (e2e)', () => {
       expect(await filesOnDisk()).toHaveLength(1);
     });
 
+    it('answers a repeated delete with 404, not a server error', async () => {
+      const { token } = await registerUser();
+      const meetingId = await createMeeting(token);
+      const fileId = await upload(token, meetingId);
+
+      // A double-clicked confirm, an impatient retry, a second tab: the second request
+      // finds the row already gone between its own read and write.
+      await request(app.getHttpServer())
+        .delete(`/meetings/${meetingId}/files/${fileId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(204);
+      await request(app.getHttpServer())
+        .delete(`/meetings/${meetingId}/files/${fileId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(404);
+
+      await request(app.getHttpServer())
+        .delete(`/meetings/${meetingId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(204);
+      await request(app.getHttpServer())
+        .delete(`/meetings/${meetingId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(404);
+    });
+
     it('returns 404 for a meeting that does not exist', async () => {
       const { token } = await registerUser();
 

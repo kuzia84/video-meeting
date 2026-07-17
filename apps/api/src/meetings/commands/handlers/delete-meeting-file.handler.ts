@@ -1,4 +1,5 @@
 import { Logger, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { MeetingFileStorage } from '../../../storage/meeting-file-storage.service';
@@ -35,7 +36,16 @@ export class DeleteMeetingFileHandler implements ICommandHandler<DeleteMeetingFi
     // Row first, then bytes. The reverse order fails badly: if the row survived a
     // successful unlink, the meeting would list a file that downloads 404s. This way the
     // worst case is bytes nobody references — wasted space, nothing broken.
-    await this.prisma.meetingFile.delete({ where: { id: file.id } });
+    try {
+      await this.prisma.meetingFile.delete({ where: { id: file.id } });
+    } catch (error) {
+      // Already gone between the read and here — a double-clicked confirm, a second tab.
+      // That is the same "not there" the read reports as 404, not a 500.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        throw new NotFoundException('File not found');
+      }
+      throw error;
+    }
 
     const removed = await this.storage.removeAll([file.storedName]);
     if (removed === 0) {
