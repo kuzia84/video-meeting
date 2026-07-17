@@ -75,7 +75,6 @@ export function apiErrorFromText(status: number, text: string, fallback: string)
 // a non-2xx response. Returns the raw success envelope (unknown) so callers can
 // pull just `data` (fetchJson) or the full paginated envelope (fetchPaginated).
 async function request(path: string, options?: RequestInit): Promise<unknown> {
-
   const res = await send(path, {
     headers: { 'Content-Type': 'application/json' },
     ...options,

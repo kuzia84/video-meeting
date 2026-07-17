@@ -26,6 +26,8 @@ Browser e2e (`e2e/`, `playwright.config.ts`) run the real stack: the frontend ag
 
 `use.timezoneId` is pinned to `UTC` so assertions on rendered dates mean the same thing on every machine — the app formats times in the browser's zone, so without it a developer in UTC+3 and a CI box in UTC disagree about what a given instant reads as, and whoever wrote the test wins by accident.
 
+These tests write to the **dev** database and upload directory — they drive the dev server, which reads its own `.env`, so they cannot be given their own the way the API's e2e are. Instead they clean up: `globalTeardown` runs `npm run db:clean-e2e -w @video-meetings/api`, which deletes every `e2e-`-prefixed account and unlinks its uploads (a cascade would leave the bytes). It never fails the run — housekeeping must not turn a green suite red. Keep the `e2e-` prefix in `registerUser`: it is what the cleanup matches on.
+
 Tests seed through the API rather than the UI (`e2e/support.ts`: `registerUser`, `createMeeting`/`createMeetings`, `signIn`) — the creation form does not exist yet, and driving it would test that form instead of the screen under test. `signIn` writes the token into `sessionStorage` via `addInitScript`, mirroring what the app reads. Every run registers a **unique** email, because the suite shares the dev database with everything else.
 
 This is not the Playwright **MCP** server from `docs/architecture/frontend-ui.md`: that drives a browser by hand to eyeball layout, this is committed tests that run unattended. Both exist, on purpose.
