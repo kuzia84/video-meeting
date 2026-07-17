@@ -47,6 +47,7 @@ export function MeetingForm({
   onCancel,
   cancelLabel = 'Отмена',
   autoFocus = false,
+  children,
 }: {
   initial?: MeetingFormInitial;
   submitLabel: string;
@@ -57,6 +58,12 @@ export function MeetingForm({
   cancelLabel?: string;
   /** Set when the form appears in place of something else, so focus follows it there. */
   autoFocus?: boolean;
+  /**
+   * Extra controls between the fields and the buttons — the create page's file picker.
+   * A slot, not a prop on this component: files belong to creating a meeting, not to
+   * editing one, and this form serves both.
+   */
+  children?: React.ReactNode;
 }) {
   const [isSubmitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -202,6 +209,8 @@ export function MeetingForm({
         <Input className="h-11 md:h-10" />
         <FieldError />
       </TextField>
+
+      {children}
 
       <div className="flex items-center gap-3 pt-2">
         <Button type="submit" size="lg" isPending={isSubmitting} isDisabled={isSubmitting}>
