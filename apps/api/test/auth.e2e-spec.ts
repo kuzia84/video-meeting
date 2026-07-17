@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { assertE2eDatabase } from './e2e-database';
 
 function decodeJwtPayload(token: string): Record<string, unknown> {
   const [, payload] = token.split('.');
@@ -30,6 +31,8 @@ describe('Auth (e2e)', () => {
   });
 
   beforeEach(async () => {
+    // This suite deletes every user it can see — never let that be the dev database.
+    assertE2eDatabase();
     await prisma.user.deleteMany();
   });
 

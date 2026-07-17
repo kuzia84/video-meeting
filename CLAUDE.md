@@ -40,9 +40,11 @@ npm run dev -w @video-meetings/web
 **E2E suites are not part of `npm run test`** — both need a running Postgres, so they stay out of the cached turbo task and are run on purpose:
 
 ```bash
-npm run test:e2e -w @video-meetings/api   # API e2e (supertest)
+npm run test:e2e -w @video-meetings/api   # API e2e (supertest) — uses its own database, see below
 npm run test:e2e -w @video-meetings/web   # browser e2e (Playwright; needs `npx playwright install chromium` once)
 ```
+
+The **API e2e run creates and uses its own database** (`video_meetings_e2e`, same Postgres server), because its suites clear `user` and `meeting` wholesale between tests. Nothing it does touches the dev database or the `npm run db:seed` account. The **browser e2e** are the opposite: they drive the running dev server, so they read and write the **dev** database — they only ever add rows, never delete, but their seeded users do accumulate there.
 
 Running a single test file (from `apps/api`, or via `-w @video-meetings/api`):
 

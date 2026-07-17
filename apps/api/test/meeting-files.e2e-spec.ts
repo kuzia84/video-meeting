@@ -8,6 +8,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { MAX_UPLOAD_BYTES } from '../src/meetings/meeting-file-validation';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { assertE2eDatabase } from './e2e-database';
 import { UPLOAD_DIR } from '../src/storage/storage.constants';
 // Load-bearing beyond the constant: importing setup-e2e sets UPLOAD_DIR to the isolated
 // directory even if this suite is ever run through a config without its `setupFiles`.
@@ -107,6 +108,8 @@ describe('Meeting files (e2e)', () => {
   beforeAll(startApp);
 
   beforeEach(async () => {
+    // This suite deletes every user it can see — never let that be the dev database.
+    assertE2eDatabase();
     await prisma.meeting.deleteMany();
     await prisma.user.deleteMany();
     // Empty the directory but keep it: multer does not create its destination.
