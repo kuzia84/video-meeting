@@ -361,6 +361,177 @@ describe('Meeting files (e2e)', () => {
     });
   });
 
+  describe('DELETE', () => {
+    it('removes a file: its row and its bytes', async () => {
+      const { token } = await registerUser();
+      const meetingId = await createMeeting(token);
+      const fileId = await upload(token, meetingId);
+      expect(await filesOnDisk()).toHaveLength(1);
+
+      await request(app.getHttpServer())
+        .delete(`/meetings/${meetingId}/files/${fileId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(204);
+
+      expect(await prisma.meetingFile.count()).toBe(0);
+      // The criterion is about the disk, not just the database.
+      expect(await filesOnDisk()).toHaveLength(0);
+    });
+
+    it('leaves the meeting’s other files alone', async () => {
+      const { token } = await registerUser();
+      const meetingId = await createMeeting(token);
+      const doomed = await upload(token, meetingId, { filename: 'doomed.mp3' });
+      const keeper = await upload(token, meetingId, { filename: 'keeper.mp3' });
+
+      await request(app.getHttpServer())
+        .delete(`/meetings/${meetingId}/files/${doomed}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(204);
+
+      const remaining = await prisma.meetingFile.findMany();
+      expect(remaining.map((f) => f.id)).toEqual([keeper]);
+      expect(await filesOnDisk()).toEqual([remaining[0].storedName]);
+    });
+
+    it('removes a meeting with several files, rows and bytes together', async () => {
+      const { token } = await registerUser();
+      const meetingId = await createMeeting(token);
+      await upload(token, meetingId, { filename: 'one.mp3' });
+      await upload(token, meetingId, { filename: 'two.mp3' });
+      expect(await filesOnDisk()).toHaveLength(2);
+
+      await request(app.getHttpServer())
+        .delete(`/meetings/${meetingId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(204);
+
+      expect(await prisma.meeting.count()).toBe(0);
+      // Cascade takes the rows; the bytes are ours to remove, and the schema has always
+      // said the cascade would not touch them.
+      expect(await prisma.meetingFile.count()).toBe(0);
+      expect(await filesOnDisk()).toHaveLength(0);
+    });
+
+    it('returns 404 for a file of another meeting and deletes nothing', async () => {
+      const { token } = await registerUser();
+      const meetingId = await createMeeting(token);
+      const otherMeetingId = await createMeeting(token);
+      const fileId = await upload(token, otherMeetingId);
+
+      // The caller owns both meetings, so only the file↔meeting check can refuse this.
+      await request(app.getHttpServer())
+        .delete(`/meetings/${meetingId}/files/${fileId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(404);
+
+      expect(await prisma.meetingFile.count()).toBe(1);
+      expect(await filesOnDisk()).toHaveLength(1);
+    });
+
+    it('does not let a stranger delete a file', async () => {
+      const owner = await registerUser();
+      const stranger = await registerUser();
+      const meetingId = await createMeeting(owner.token);
+      const fileId = await upload(owner.token, meetingId);
+
+      await request(app.getHttpServer())
+        .delete(`/meetings/${meetingId}/files/${fileId}`)
+        .set('Authorization', `Bearer ${stranger.token}`)
+        .expect(404);
+
+      expect(await prisma.meetingFile.count()).toBe(1);
+      expect(await filesOnDisk()).toHaveLength(1);
+    });
+
+    it('does not let a stranger delete a meeting', async () => {
+      const owner = await registerUser();
+      const stranger = await registerUser();
+      const meetingId = await createMeeting(owner.token);
+      await upload(owner.token, meetingId);
+
+      await request(app.getHttpServer())
+        .delete(`/meetings/${meetingId}`)
+        .set('Authorization', `Bearer ${stranger.token}`)
+        .expect(404);
+
+      expect(await prisma.meeting.count()).toBe(1);
+      expect(await filesOnDisk()).toHaveLength(1);
+    });
+
+    it('deletes nothing without a token', async () => {
+      const { token } = await registerUser();
+      const meetingId = await createMeeting(token);
+      const fileId = await upload(token, meetingId);
+
+      await request(app.getHttpServer())
+        .delete(`/meetings/${meetingId}/files/${fileId}`)
+        .expect(401);
+      await request(app.getHttpServer()).delete(`/meetings/${meetingId}`).expect(401);
+
+      expect(await prisma.meeting.count()).toBe(1);
+      expect(await prisma.meetingFile.count()).toBe(1);
+      expect(await filesOnDisk()).toHaveLength(1);
+    });
+
+    it('answers a repeated delete with 404, not a server error', async () => {
+      const { token } = await registerUser();
+      const meetingId = await createMeeting(token);
+      const fileId = await upload(token, meetingId);
+
+      // A double-clicked confirm, an impatient retry, a second tab: the second request
+      // finds the row already gone between its own read and write.
+      await request(app.getHttpServer())
+        .delete(`/meetings/${meetingId}/files/${fileId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(204);
+      await request(app.getHttpServer())
+        .delete(`/meetings/${meetingId}/files/${fileId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(404);
+
+      await request(app.getHttpServer())
+        .delete(`/meetings/${meetingId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(204);
+      await request(app.getHttpServer())
+        .delete(`/meetings/${meetingId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(404);
+    });
+
+    it('returns 404 for a meeting that does not exist', async () => {
+      const { token } = await registerUser();
+
+      await request(app.getHttpServer())
+        .delete('/meetings/00000000-0000-0000-0000-000000000000')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(404);
+    });
+
+    it('a deleted file stops being listed and downloadable', async () => {
+      const { token } = await registerUser();
+      const meetingId = await createMeeting(token);
+      const fileId = await upload(token, meetingId);
+
+      await request(app.getHttpServer())
+        .delete(`/meetings/${meetingId}/files/${fileId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(204);
+
+      const list = await request(app.getHttpServer())
+        .get(`/meetings/${meetingId}/files`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect(list.body.data).toEqual([]);
+
+      await request(app.getHttpServer())
+        .get(`/meetings/${meetingId}/files/${fileId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(404);
+    });
+  });
+
   describe('GET /meetings/:meetingId/files', () => {
     it('lists the meeting’s files with their metadata', async () => {
       const { token } = await registerUser();

@@ -1,13 +1,18 @@
 'use client';
 
 import { Button, buttonVariants, ProgressBar } from '@heroui/react';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import {
+  ApiError,
+  deleteMeetingFile,
   downloadMeetingFile,
   listMeetingFiles,
   uploadMeetingFile,
   type MeetingFile,
 } from '@/lib/api/meeting-files';
+import { removeAccessToken } from '@/lib/auth/token';
 import { formatFileSize } from './format-file-size';
 
 type Status = 'loading' | 'ready' | 'error';
@@ -37,6 +42,7 @@ function FileIcon(props: React.SVGProps<SVGSVGElement>) {
 }
 
 export function MeetingFiles({ meetingId }: { meetingId: string }) {
+  const router = useRouter();
   const [status, setStatus] = useState<Status>('loading');
   const [files, setFiles] = useState<MeetingFile[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -103,6 +109,25 @@ export function MeetingFiles({ meetingId }: { meetingId: string }) {
     } finally {
       setDownloading(file.id, false);
     }
+  }
+
+  async function handleDelete(file: MeetingFile) {
+    try {
+      await deleteMeetingFile(meetingId, file.id);
+    } catch (err) {
+      // An expired token is "log in again", not "could not delete" — which is what the
+      // dialog would otherwise show to someone who would keep retrying. Every other call
+      // in the app handles it this way.
+      if (err instanceof ApiError && err.status === 401) {
+        removeAccessToken();
+        router.replace('/login');
+        return;
+      }
+      throw err;
+    }
+    // Dropped from what is on screen rather than re-fetching: the server has confirmed
+    // it is gone, and the rest of the list was already right.
+    setFiles((current) => current.filter((f) => f.id !== file.id));
   }
 
   async function handleUpload(file: File) {
@@ -238,16 +263,34 @@ export function MeetingFiles({ meetingId }: { meetingId: string }) {
                     </span>
                   </div>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  isDisabled={downloadingIds.has(file.id)}
-                  onPress={() => void handleDownload(file)}
-                  // Every row's button reads "Скачать"; the name says which file.
-                  aria-label={`Скачать ${file.originalName}`}
-                >
-                  {downloadingIds.has(file.id) ? 'Скачивание…' : 'Скачать'}
-                </Button>
+                <div className="flex shrink-0 items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    isDisabled={downloadingIds.has(file.id)}
+                    onPress={() => void handleDownload(file)}
+                    // Every row's button reads "Скачать"; the name says which file.
+                    aria-label={`Скачать ${file.originalName}`}
+                  >
+                    {downloadingIds.has(file.id) ? 'Скачивание…' : 'Скачать'}
+                  </Button>
+                  <ConfirmDeleteDialog
+                    trigger={
+                      <Button variant="ghost" size="sm" aria-label={`Удалить ${file.originalName}`}>
+                        Удалить
+                      </Button>
+                    }
+                    heading="Удалить файл?"
+                    body={
+                      <p>
+                        Файл <strong>{file.originalName}</strong> будет удалён безвозвратно.
+                      </p>
+                    }
+                    confirmLabel="Удалить файл"
+                    pendingLabel="Удаление…"
+                    onConfirm={() => handleDelete(file)}
+                  />
+                </div>
               </li>
             ))}
           </ul>

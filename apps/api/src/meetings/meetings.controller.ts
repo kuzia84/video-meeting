@@ -1,4 +1,15 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import { Meeting } from '@prisma/client';
 import type { ApiResponse, PaginatedResponse } from '@video-meetings/shared';
@@ -6,6 +17,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AuthUser } from '../auth/auth.types';
 import { CreateMeetingCommand } from './commands/create-meeting.command';
+import { DeleteMeetingCommand } from './commands/delete-meeting.command';
 import { UpdateMeetingCommand } from './commands/update-meeting.command';
 import { CreateMeetingDto } from './dto/create-meeting.dto';
 import { ListMeetingsDto } from './dto/list-meetings.dto';
@@ -80,5 +92,14 @@ export class MeetingsController {
       }),
     );
     return { success: true, message: 'Meeting updated', data };
+  }
+
+  @Delete(':id')
+  // 204: the meeting is gone, so there is nothing left to return.
+  @HttpCode(204)
+  async remove(@CurrentUser() user: AuthUser, @Param('id') id: string): Promise<void> {
+    await this.commandBus.execute<DeleteMeetingCommand, void>(
+      new DeleteMeetingCommand(user.userId, id),
+    );
   }
 }

@@ -1,4 +1,4 @@
-import { apiErrorFromText, apiUrl, fetchBlob, fetchJson } from './client';
+import { apiErrorFromText, apiUrl, fetchBlob, fetchJson, fetchVoid } from './client';
 import { getAccessToken } from '@/lib/auth/token';
 
 export { ApiError } from './client';
@@ -86,6 +86,14 @@ export function uploadMeetingFile(
 
     xhr.send(form);
   });
+}
+
+/** 204, so there is no body to read back. */
+export async function deleteMeetingFile(meetingId: string, fileId: string): Promise<void> {
+  await fetchVoid(
+    `/meetings/${encodeURIComponent(meetingId)}/files/${encodeURIComponent(fileId)}`,
+    { method: 'DELETE', headers: authHeaders() },
+  );
 }
 
 export function listMeetingFiles(meetingId: string): Promise<MeetingFile[]> {

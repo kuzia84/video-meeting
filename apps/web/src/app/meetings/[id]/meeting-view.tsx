@@ -5,8 +5,16 @@ import NextLink from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppHeader } from '@/components/app-header';
-import { ApiError, getMeeting, type Meeting } from '@/lib/api/meetings';
+import {
+  ApiError,
+  deleteMeeting,
+  getMeeting,
+  updateMeeting,
+  type Meeting,
+} from '@/lib/api/meetings';
 import { getAccessToken, removeAccessToken } from '@/lib/auth/token';
+import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
+import { MeetingForm } from '@/components/meeting-form';
 import { MeetingFiles } from './meeting-files';
 
 // 'missing' is its own state, not an error: a meeting that is not there is a normal
@@ -37,6 +45,11 @@ export function MeetingView({ meetingId }: { meetingId: string }) {
   const [status, setStatus] = useState<Status>('loading');
   const [meeting, setMeeting] = useState<Meeting | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isEditing, setEditing] = useState(false);
+  const [savedNotice, setSavedNotice] = useState(false);
+  // Focus is on the Редактировать button when it unmounts, so it must be put back by
+  // hand — otherwise it falls to <body> and the user restarts from the top of the page.
+  const editButtonRef = useRef<HTMLButtonElement>(null);
 
   // React Strict Mode runs effects twice in dev; guard the one-time auth check so it
   // doesn't fire (and redirect) twice.
@@ -129,29 +142,112 @@ export function MeetingView({ meetingId }: { meetingId: string }) {
         </NextLink>
       </nav>
 
-      <article className="flex flex-col gap-6">
-        <header className="flex flex-col gap-2">
-          <h1 className="text-2xl font-semibold tracking-tight">{meeting.title}</h1>
-          <p className="text-muted text-sm">
-            <time dateTime={meeting.startTime}>
-              {dateTimeFormatter.format(new Date(meeting.startTime))}
-            </time>
-            {' — '}
-            <time dateTime={meeting.endTime}>
-              {dateTimeFormatter.format(new Date(meeting.endTime))}
-            </time>
-          </p>
-        </header>
-
-        <section className="flex flex-col gap-2">
-          <h2 className="text-sm font-medium">Описание</h2>
-          {meeting.description ? (
-            <p className="whitespace-pre-wrap">{meeting.description}</p>
-          ) : (
-            <p className="text-muted text-sm">Описание не указано</p>
-          )}
+      {isEditing ? (
+        <section className="flex flex-col gap-4">
+          <h1 className="text-2xl font-semibold tracking-tight">Редактирование встречи</h1>
+          <MeetingForm
+            // Pre-filled with what is on screen, so the form starts from the truth.
+            initial={meeting}
+            submitLabel="Сохранить"
+            pendingLabel="Сохранение…"
+            // The form replaces the button that had focus, so it takes focus with it.
+            autoFocus
+            onCancel={() => {
+              setEditing(false);
+              // Focus returns where it came from rather than falling to <body>.
+              requestAnimationFrame(() => editButtonRef.current?.focus());
+            }}
+            onSubmit={async (values) => {
+              try {
+                // The response is the updated row, so the page can show it without a
+                // second request.
+                setMeeting(await updateMeeting(meeting.id, values));
+                setEditing(false);
+                // Otherwise a save and a cancel look identical: the form just disappears.
+                setSavedNotice(true);
+                requestAnimationFrame(() => editButtonRef.current?.focus());
+              } catch (err) {
+                if (err instanceof ApiError && err.status === 401) {
+                  removeAccessToken();
+                  router.replace('/login');
+                  return;
+                }
+                // Rethrown so the form reports it above the fields.
+                throw err;
+              }
+            }}
+          />
         </section>
-      </article>
+      ) : (
+        <article className="flex flex-col gap-6">
+          <header className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <h1 className="text-2xl font-semibold tracking-tight">{meeting.title}</h1>
+              <div className="flex shrink-0 items-center gap-2">
+                <Button
+                  ref={editButtonRef}
+                  variant="outline"
+                  size="sm"
+                  onPress={() => {
+                    setSavedNotice(false);
+                    setEditing(true);
+                  }}
+                >
+                  Редактировать
+                </Button>
+                <ConfirmDeleteDialog
+                  trigger={
+                    <Button variant="ghost" size="sm">
+                      Удалить встречу
+                    </Button>
+                  }
+                  heading="Удалить встречу?"
+                  body={
+                    <p>
+                      Встреча <strong>{meeting.title}</strong> и все её файлы будут удалены
+                      безвозвратно.
+                    </p>
+                  }
+                  // Not "Удалить встречу": that is the trigger's own name, and two
+                  // buttons answering to one name are two outcomes for one utterance.
+                  confirmLabel="Да, удалить"
+                  pendingLabel="Удаление…"
+                  onConfirm={async () => {
+                    await deleteMeeting(meeting.id);
+                    // Nothing left to show here, so leave the page rather than render a
+                    // meeting that no longer exists.
+                    router.push('/');
+                  }}
+                />
+              </div>
+            </div>
+            <p className="text-muted text-sm">
+              <time dateTime={meeting.startTime}>
+                {dateTimeFormatter.format(new Date(meeting.startTime))}
+              </time>
+              {' — '}
+              <time dateTime={meeting.endTime}>
+                {dateTimeFormatter.format(new Date(meeting.endTime))}
+              </time>
+            </p>
+          </header>
+
+          {savedNotice ? (
+            <p className="text-success text-sm" role="status">
+              Изменения сохранены
+            </p>
+          ) : null}
+
+          <section className="flex flex-col gap-2">
+            <h2 className="text-sm font-medium">Описание</h2>
+            {meeting.description ? (
+              <p className="whitespace-pre-wrap">{meeting.description}</p>
+            ) : (
+              <p className="text-muted text-sm">Описание не указано</p>
+            )}
+          </section>
+        </article>
+      )}
 
       {/* Rendered only once the meeting itself resolved: on a 404 there is no meeting to
           hang files off, and asking for its files would just be a second 404. */}

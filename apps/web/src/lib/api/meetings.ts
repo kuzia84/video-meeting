@@ -1,4 +1,4 @@
-import { fetchJson, fetchPaginated } from './client';
+import { fetchJson, fetchPaginated, fetchVoid } from './client';
 import { getAccessToken } from '@/lib/auth/token';
 import type { PaginatedResponse } from '@video-meetings/shared';
 
@@ -63,6 +63,27 @@ export function createMeeting(meeting: NewMeeting): Promise<Meeting> {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify(meeting),
+  });
+}
+
+/**
+ * PATCH: only the fields sent are changed. `description: null` clears it, which is why
+ * this takes the same shape as create rather than a partial of it — the form always has
+ * every field, so it always sends every field.
+ */
+export function updateMeeting(id: string, changes: NewMeeting): Promise<Meeting> {
+  return fetchJson<Meeting>(`/meetings/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify(changes),
+  });
+}
+
+/** 204, so there is no body to read back. */
+export async function deleteMeeting(id: string): Promise<void> {
+  await fetchVoid(`/meetings/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
   });
 }
 
