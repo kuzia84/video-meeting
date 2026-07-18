@@ -17,3 +17,12 @@ export interface AuthResult {
     email: string;
   };
 }
+
+// The signed-in user's own profile, returned by GET /users/me. `name` and
+// `avatarUrl` are null until the user sets them. Never carries passwordHash.
+export interface UserProfile {
+  id: string;
+  email: string;
+  name: string | null;
+  avatarUrl: string | null;
+}

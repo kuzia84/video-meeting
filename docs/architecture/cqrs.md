@@ -64,21 +64,22 @@ export class GetMeetingQuery {
 
 ## Текущий инвентарь
 
-| Операция               | Тип     | Класс                      | Хендлер                    | Маршрут                                        |
-| ---------------------- | ------- | -------------------------- | -------------------------- | ---------------------------------------------- |
-| Регистрация            | Command | `RegisterCommand`          | `RegisterHandler`          | `POST /auth/register` (201)                    |
-| Логин                  | Command | `LoginCommand`             | `LoginHandler`             | `POST /auth/login` (200)                       |
-| Создать пользователя   | Command | `CreateUserCommand`        | `CreateUserHandler`        | — (внутр., из `RegisterHandler`)               |
-| Пользователь по email  | Query   | `GetUserByEmailQuery`      | `GetUserByEmailHandler`    | — (внутр., из `LoginHandler`)                  |
-| Создать встречу        | Command | `CreateMeetingCommand`     | `CreateMeetingHandler`     | `POST /meetings` (201)                         |
-| Изменить встречу       | Command | `UpdateMeetingCommand`     | `UpdateMeetingHandler`     | `PATCH /meetings/:id` (200)                    |
-| Удалить встречу        | Command | `DeleteMeetingCommand`     | `DeleteMeetingHandler`     | `DELETE /meetings/:id` (204)                   |
+| Операция               | Тип     | Класс                      | Хендлер                    | Маршрут                                           |
+| ---------------------- | ------- | -------------------------- | -------------------------- | ------------------------------------------------- |
+| Регистрация            | Command | `RegisterCommand`          | `RegisterHandler`          | `POST /auth/register` (201)                       |
+| Логин                  | Command | `LoginCommand`             | `LoginHandler`             | `POST /auth/login` (200)                          |
+| Создать пользователя   | Command | `CreateUserCommand`        | `CreateUserHandler`        | — (внутр., из `RegisterHandler`)                  |
+| Пользователь по email  | Query   | `GetUserByEmailQuery`      | `GetUserByEmailHandler`    | — (внутр., из `LoginHandler`)                     |
+| Пользователь по id     | Query   | `GetUserByIdQuery`         | `GetUserByIdHandler`       | `GET /users/me` (200, профиль текущего)           |
+| Создать встречу        | Command | `CreateMeetingCommand`     | `CreateMeetingHandler`     | `POST /meetings` (201)                            |
+| Изменить встречу       | Command | `UpdateMeetingCommand`     | `UpdateMeetingHandler`     | `PATCH /meetings/:id` (200)                       |
+| Удалить встречу        | Command | `DeleteMeetingCommand`     | `DeleteMeetingHandler`     | `DELETE /meetings/:id` (204)                      |
 | Удалить файл встречи   | Command | `DeleteMeetingFileCommand` | `DeleteMeetingFileHandler` | `DELETE /meetings/:meetingId/files/:fileId` (204) |
-| Список встреч          | Query   | `ListMeetingsQuery`        | `ListMeetingsHandler`      | `GET /meetings` (200)                          |
-| Одна встреча           | Query   | `GetMeetingQuery`          | `GetMeetingHandler`        | `GET /meetings/:id` (200)                      |
-| Загрузить файл встречи | Command | `UploadMeetingFileCommand` | `UploadMeetingFileHandler` | `POST /meetings/:meetingId/files` (201)        |
-| Список файлов встречи  | Query   | `ListMeetingFilesQuery`    | `ListMeetingFilesHandler`  | `GET /meetings/:meetingId/files` (200)         |
-| Один файл встречи      | Query   | `GetMeetingFileQuery`      | `GetMeetingFileHandler`    | `GET /meetings/:meetingId/files/:fileId` (200) |
+| Список встреч          | Query   | `ListMeetingsQuery`        | `ListMeetingsHandler`      | `GET /meetings` (200)                             |
+| Одна встреча           | Query   | `GetMeetingQuery`          | `GetMeetingHandler`        | `GET /meetings/:id` (200)                         |
+| Загрузить файл встречи | Command | `UploadMeetingFileCommand` | `UploadMeetingFileHandler` | `POST /meetings/:meetingId/files` (201)           |
+| Список файлов встречи  | Query   | `ListMeetingFilesQuery`    | `ListMeetingFilesHandler`  | `GET /meetings/:meetingId/files` (200)            |
+| Один файл встречи      | Query   | `GetMeetingFileQuery`      | `GetMeetingFileHandler`    | `GET /meetings/:meetingId/files/:fileId` (200)    |
 
 ## Как это связано
 
