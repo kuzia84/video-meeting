@@ -55,3 +55,6 @@ Thumbs.db
 .vscode
 .idea
 *.swp
+
+# Ralph loop state (per-session, not shared)
+.claude/.ralph-state.json
