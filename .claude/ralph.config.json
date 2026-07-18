@@ -1,0 +1,7 @@
+{
+  "milestone": "",
+  "maxIterations": 1,
+  "maxSessionBytes": 1500000,
+  "branch": "feature/user-profile-phase-1",
+  "prompt": "Прочитай .claude/ralph.md и следуй правилам оттуда. Возьми следующую открытую Issue из milestone '{milestone}' и реализуй его в '{branch}'."
+}
