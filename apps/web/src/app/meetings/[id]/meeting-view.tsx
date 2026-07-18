@@ -4,7 +4,7 @@ import { Button, buttonVariants } from '@heroui/react';
 import NextLink from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppHeader } from '@/components/app-header';
+import { PageShell } from '@/components/page-shell';
 import {
   ApiError,
   deleteMeeting,
@@ -28,17 +28,6 @@ const dateTimeFormatter = new Intl.DateTimeFormat('ru-RU', {
   hour: '2-digit',
   minute: '2-digit',
 });
-
-function Shell({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex min-h-screen flex-col">
-      <AppHeader />
-      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 p-4 py-8">
-        {children}
-      </main>
-    </div>
-  );
-}
 
 export function MeetingView({ meetingId }: { meetingId: string }) {
   const router = useRouter();
@@ -100,7 +89,7 @@ export function MeetingView({ meetingId }: { meetingId: string }) {
 
   if (status === 'missing') {
     return (
-      <Shell>
+      <PageShell>
         <section className="flex flex-col items-center gap-3 py-12 text-center">
           <h1 className="text-2xl font-semibold tracking-tight">Встреча не найдена</h1>
           <p className="text-muted max-w-sm text-sm text-balance">
@@ -112,7 +101,7 @@ export function MeetingView({ meetingId }: { meetingId: string }) {
             К списку встреч
           </NextLink>
         </section>
-      </Shell>
+      </PageShell>
     );
   }
 
@@ -121,7 +110,7 @@ export function MeetingView({ meetingId }: { meetingId: string }) {
   // `{errorMessage}`.
   if (status === 'error' || !meeting) {
     return (
-      <Shell>
+      <PageShell>
         <section className="flex flex-col items-center gap-3 py-12 text-center">
           <h1 className="text-2xl font-semibold tracking-tight">Не удалось загрузить встречу</h1>
           <p className="text-danger max-w-sm text-sm text-balance" role="alert">
@@ -130,12 +119,12 @@ export function MeetingView({ meetingId }: { meetingId: string }) {
           {/* Retries the request, not the whole document: no reason to re-boot the app. */}
           <Button onPress={() => void load()}>Попробовать снова</Button>
         </section>
-      </Shell>
+      </PageShell>
     );
   }
 
   return (
-    <Shell>
+    <PageShell>
       <nav aria-label="Назад">
         <NextLink href="/" className="text-muted hover:text-foreground text-sm">
           ← К списку встреч
@@ -252,6 +241,6 @@ export function MeetingView({ meetingId }: { meetingId: string }) {
       {/* Rendered only once the meeting itself resolved: on a 404 there is no meeting to
           hang files off, and asking for its files would just be a second 404. */}
       <MeetingFiles meetingId={meeting.id} />
-    </Shell>
+    </PageShell>
   );
 }

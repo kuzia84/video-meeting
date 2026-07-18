@@ -1,19 +1,41 @@
 'use client';
 
+import { Button, Card, Input, Label, TextField } from '@heroui/react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
-import { AppHeader } from '@/components/app-header';
-import { getAccessToken } from '@/lib/auth/token';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { PageShell } from '@/components/page-shell';
+import { ApiError, getProfile, type UserProfile } from '@/lib/api/profile';
+import { getAccessToken, removeAccessToken } from '@/lib/auth/token';
 
-type Status = 'loading' | 'ready';
+type Status = 'loading' | 'ready' | 'error';
 
 export function ProfileView() {
   const router = useRouter();
   const [status, setStatus] = useState<Status>('loading');
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // React 18 Strict Mode runs effects twice in dev; guard the one-time auth
-  // check so it doesn't fire (and redirect) twice.
+  // React Strict Mode runs effects twice in dev; guard the one-time auth check so it
+  // doesn't fire (and redirect) twice.
   const startedRef = useRef(false);
+
+  const load = useCallback(async () => {
+    setStatus('loading');
+    setErrorMessage(null);
+    try {
+      setProfile(await getProfile());
+      setStatus('ready');
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        // Expired or invalid token: drop it and send the user to log in again.
+        removeAccessToken();
+        router.replace('/login');
+        return;
+      }
+      setErrorMessage(err instanceof Error ? err.message : 'Не удалось загрузить профиль.');
+      setStatus('error');
+    }
+  }, [router]);
 
   useEffect(() => {
     if (startedRef.current) return;
@@ -26,8 +48,8 @@ export function ProfileView() {
       router.replace('/login');
       return;
     }
-    setStatus('ready');
-  }, [router]);
+    void load();
+  }, [router, load]);
 
   if (status === 'loading') {
     return (
@@ -37,13 +59,46 @@ export function ProfileView() {
     );
   }
 
-  return (
-    <div className="flex min-h-screen flex-col">
-      <AppHeader />
-
-      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 p-4 py-8">
+  // `!profile` cannot happen while status is 'ready', but guard it so a stray render
+  // can never reach into a null profile below.
+  if (status === 'error' || !profile) {
+    return (
+      <PageShell>
         <h1 className="text-2xl font-semibold tracking-tight">Профиль</h1>
-      </main>
-    </div>
+        <section className="flex flex-col items-start gap-3">
+          <p className="text-danger text-sm" role="alert">
+            {errorMessage ?? 'Попробуйте ещё раз.'}
+          </p>
+          {/* Retries the request, not the whole document: no reason to re-boot the app. */}
+          <Button onPress={() => void load()}>Попробовать снова</Button>
+        </section>
+      </PageShell>
+    );
+  }
+
+  // Until the user sets a name (a later phase), the email stands in for it everywhere.
+  // Treat a blank/whitespace name as unset, not just null.
+  const hasName = Boolean(profile.name?.trim());
+  const displayName = hasName ? (profile.name as string) : profile.email;
+
+  return (
+    <PageShell>
+      <h1 className="text-2xl font-semibold tracking-tight">Профиль</h1>
+
+      <Card className="w-full max-w-sm">
+        <Card.Header>
+          <Card.Title>{displayName}</Card.Title>
+          {hasName ? null : <Card.Description>Имя пока не задано — показан email</Card.Description>}
+        </Card.Header>
+        <Card.Content className="flex flex-col gap-4 p-6 pt-0">
+          {/* Email is read-only in every phase: it identifies the account and is never
+              editable here, unlike the name (which becomes editable later). */}
+          <TextField isReadOnly value={profile.email}>
+            <Label>Email</Label>
+            <Input className="h-11 md:h-10" />
+          </TextField>
+        </Card.Content>
+      </Card>
+    </PageShell>
   );
 }

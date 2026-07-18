@@ -35,10 +35,11 @@ export function removeAccessToken(): void {
   }
 }
 
-// The JWT payload is `{ sub, email }` (signed by the API's TokenService). We
-// only read it to greet the user by email — there is no /me endpoint, and the
-// email isn't otherwise persisted. This is not a security check: the token is
-// still what the API validates. Returns null if the token is missing/malformed.
+// The JWT payload is `{ sub, email }` (signed by the API's TokenService). The
+// home view reads it to greet the user by email without a round-trip — the
+// profile page fetches GET /users/me instead. This is not a security check: the
+// token is still what the API validates. Returns null if the token is
+// missing/malformed.
 export function getUserEmailFromToken(): string | null {
   const token = getAccessToken();
   if (!token) return null;
