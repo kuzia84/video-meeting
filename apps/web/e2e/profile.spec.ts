@@ -23,6 +23,30 @@ test.describe('Profile — page & auth gating', () => {
     await expect(email).toHaveJSProperty('readOnly', true);
   });
 
+  test('shows a default-avatar circle with the initial, and its colour survives a reload', async ({
+    page,
+    request,
+  }) => {
+    const user = await registerUser(request);
+    await signIn(page, user);
+
+    await page.goto('/profile');
+
+    const avatar = page.getByTestId('default-avatar');
+    await expect(avatar).toBeVisible();
+    // No name yet → the letter comes from the email. Test emails start with "e2e-".
+    await expect(avatar).toHaveText('E');
+
+    // The colour is stored on the user, so it must be identical after a reload.
+    const colourBefore = await avatar.evaluate((el) => getComputedStyle(el).backgroundColor);
+    await page.reload();
+
+    const avatarAfter = page.getByTestId('default-avatar');
+    await expect(avatarAfter).toHaveText('E');
+    const colourAfter = await avatarAfter.evaluate((el) => getComputedStyle(el).backgroundColor);
+    expect(colourAfter).toBe(colourBefore);
+  });
+
   test('sends an unauthenticated visitor to login', async ({ page }) => {
     await page.goto('/profile');
 

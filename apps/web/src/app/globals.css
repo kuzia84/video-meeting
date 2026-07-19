@@ -46,3 +46,20 @@
 [data-theme='dark'] .muted-on-background {
   color: var(--muted);
 }
+
+/*
+ * Default-avatar circle (src/components/default-avatar.tsx). The per-user
+ * colours are passed as inline CSS variables from the shared palette; this rule
+ * picks the light variant by default and the dark variant under the app's
+ * [data-theme='dark'] selector, so the circle is theme-aware without any JS
+ * theme detection or first-render flash. Each palette solution's foreground is
+ * verified to clear WCAG AA contrast on its background in both themes.
+ */
+.avatar-default {
+  background-color: var(--avatar-bg-light);
+  color: var(--avatar-fg-light);
+}
+[data-theme='dark'] .avatar-default {
+  background-color: var(--avatar-bg-dark);
+  color: var(--avatar-fg-dark);
+}

@@ -3,6 +3,7 @@
 import { Button, Card, Input, Label, TextField } from '@heroui/react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { DefaultAvatar } from '@/components/default-avatar';
 import { PageShell } from '@/components/page-shell';
 import { ApiError, getProfile, type UserProfile } from '@/lib/api/profile';
 import { getAccessToken, removeAccessToken } from '@/lib/auth/token';
@@ -87,8 +88,22 @@ export function ProfileView() {
 
       <Card className="w-full max-w-sm">
         <Card.Header>
-          <Card.Title>{displayName}</Card.Title>
-          {hasName ? null : <Card.Description>Имя пока не задано — показан email</Card.Description>}
+          <div className="flex items-center gap-4">
+            {/* No uploaded picture yet (that arrives in a later phase), so the
+                default circle — the user's initial in their own colour — stands in. */}
+            <DefaultAvatar
+              name={profile.name}
+              email={profile.email}
+              colorName={profile.avatarColor}
+              className="h-16 w-16 text-2xl"
+            />
+            <div className="flex flex-col gap-1">
+              <Card.Title>{displayName}</Card.Title>
+              {hasName ? null : (
+                <Card.Description>Имя пока не задано — показан email</Card.Description>
+              )}
+            </div>
+          </div>
         </Card.Header>
         <Card.Content className="flex flex-col gap-4 p-6 pt-0">
           {/* Email is read-only in every phase: it identifies the account and is never
