@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { CqrsModule } from '@nestjs/cqrs';
 import { AuthModule } from '../auth/auth.module';
 import { CreateUserHandler } from './commands/handlers/create-user.handler';
+import { UpdateUserNameHandler } from './commands/handlers/update-user-name.handler';
 import { GetUserByEmailHandler } from './queries/handlers/get-user-by-email.handler';
 import { GetUserByIdHandler } from './queries/handlers/get-user-by-id.handler';
 import { UsersController } from './users.controller';
@@ -13,6 +14,6 @@ import { UsersController } from './users.controller';
 @Module({
   imports: [CqrsModule, AuthModule],
   controllers: [UsersController],
-  providers: [CreateUserHandler, GetUserByEmailHandler, GetUserByIdHandler],
+  providers: [CreateUserHandler, UpdateUserNameHandler, GetUserByEmailHandler, GetUserByIdHandler],
 })
 export class UsersModule {}
