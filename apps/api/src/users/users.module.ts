@@ -7,6 +7,7 @@ import { AuthModule } from '../auth/auth.module';
 import { UPLOAD_DIR } from '../storage/storage.constants';
 import { CreateUserHandler } from './commands/handlers/create-user.handler';
 import { UpdateUserNameHandler } from './commands/handlers/update-user-name.handler';
+import { UpdateUserPasswordHandler } from './commands/handlers/update-user-password.handler';
 import { AvatarController } from './avatar/avatar.controller';
 import { AvatarStorage } from './avatar/avatar-storage.service';
 import { avatarFileFilter, MULTER_AVATAR_SIZE_LIMIT } from './avatar/avatar-upload-validation';
@@ -46,6 +47,7 @@ import { UsersController } from './users.controller';
   providers: [
     CreateUserHandler,
     UpdateUserNameHandler,
+    UpdateUserPasswordHandler,
     UploadAvatarHandler,
     AvatarStorage,
     GetUserByEmailHandler,
