@@ -1,14 +1,18 @@
 import { Module } from '@nestjs/common';
 import { CqrsModule } from '@nestjs/cqrs';
+import { AuthModule } from '../auth/auth.module';
 import { CreateUserHandler } from './commands/handlers/create-user.handler';
 import { GetUserByEmailHandler } from './queries/handlers/get-user-by-email.handler';
+import { GetUserByIdHandler } from './queries/handlers/get-user-by-id.handler';
+import { UsersController } from './users.controller';
 
-// Owns all access to the `user` table. Exposes its operations only as CQRS
-// command/query handlers (CreateUserCommand, GetUserByEmailQuery) — other
-// modules interact through the bus, never by injecting a service from here.
-// No controller yet: user-facing HTTP endpoints (profile, etc.) come later.
+// Owns all access to the `user` table. Its write/lookup operations are exposed
+// only as CQRS command/query handlers (other modules interact through the bus).
+// It also serves the user-facing profile route (GET /users/me), guarded by the
+// JwtAuthGuard exported from AuthModule.
 @Module({
-  imports: [CqrsModule],
-  providers: [CreateUserHandler, GetUserByEmailHandler],
+  imports: [CqrsModule, AuthModule],
+  controllers: [UsersController],
+  providers: [CreateUserHandler, GetUserByEmailHandler, GetUserByIdHandler],
 })
 export class UsersModule {}
