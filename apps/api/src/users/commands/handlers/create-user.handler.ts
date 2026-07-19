@@ -1,6 +1,7 @@
 import { ConflictException } from '@nestjs/common';
 import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
 import { Prisma, User } from '@prisma/client';
+import { pickAvatarColorName } from '@video-meetings/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { CreateUserCommand } from '../create-user.command';
 
@@ -11,7 +12,13 @@ export class CreateUserHandler implements ICommandHandler<CreateUserCommand, Use
   async execute(command: CreateUserCommand): Promise<User> {
     try {
       return await this.prisma.user.create({
-        data: { email: command.email, passwordHash: command.passwordHash },
+        // Every user gets a default-avatar colour at creation, so the circle
+        // shown before any upload is stable from the first render.
+        data: {
+          email: command.email,
+          passwordHash: command.passwordHash,
+          avatarColor: pickAvatarColorName(),
+        },
       });
     } catch (err) {
       // The unique constraint on email is the single source of truth for

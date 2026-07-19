@@ -55,7 +55,10 @@ async function main(): Promise<void> {
   const user = await prisma.user.upsert({
     where: { email: TEST_EMAIL },
     update: { passwordHash },
-    create: { email: TEST_EMAIL, passwordHash },
+    // avatarColor is required; a fixed palette name (see AVATAR_COLOR_SOLUTIONS
+    // in @video-meetings/shared) keeps the dev account's default avatar stable.
+    // Only set on create — re-seeding leaves an existing account's colour alone.
+    create: { email: TEST_EMAIL, passwordHash, avatarColor: 'blue' },
   });
 
   // Only the seed's own meetings are replaced, matched by title. A blanket

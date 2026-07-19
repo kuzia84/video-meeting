@@ -30,6 +30,7 @@ export class UsersController {
       email: user.email,
       name: user.name,
       avatarUrl: user.avatarUrl,
+      avatarColor: user.avatarColor,
     };
     return { success: true, message: 'Profile', data };
   }

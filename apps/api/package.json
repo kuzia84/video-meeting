@@ -3,8 +3,11 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
+    "prebuild": "npm run build -w @video-meetings/shared",
     "build": "nest build",
+    "predev": "npm run build -w @video-meetings/shared",
     "dev": "nest start --watch",
+    "prestart": "npm run build -w @video-meetings/shared",
     "start": "node dist/main",
     "lint": "eslint \"{src,test}/**/*.ts\"",
     "lint:fix": "eslint \"{src,test}/**/*.ts\" --fix",
@@ -65,6 +68,9 @@
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
+    },
+    "moduleNameMapper": {
+      "^@video-meetings/shared$": "<rootDir>/../../../packages/shared/src/index.ts"
     },
     "collectCoverageFrom": [
       "**/*.(t|j)s"
