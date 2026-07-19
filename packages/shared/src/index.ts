@@ -1,3 +1,4 @@
+export * from './avatar-initial';
 export * from './avatar-palette';
 
 export interface ApiResponse<T> {
