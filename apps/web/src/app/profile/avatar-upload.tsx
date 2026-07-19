@@ -27,6 +27,9 @@ export function AvatarUpload({
   const inputRef = useRef<HTMLInputElement>(null);
 
   async function handleUpload(file: File) {
+    // No unmount abort (unlike the meeting-file upload): the payload is ≤ 5 MB, and the
+    // success path targets the still-mounted app-root current-user source, so a completion
+    // after this component unmounts is harmless.
     setUploading(true);
     setError(null);
     try {
@@ -68,7 +71,7 @@ export function AvatarUpload({
       </label>
 
       {error ? (
-        <Alert status="danger" role="alert" aria-live="assertive">
+        <Alert status="danger" role="alert">
           <Alert.Indicator />
           <Alert.Content>
             <Alert.Description>{error}</Alert.Description>
