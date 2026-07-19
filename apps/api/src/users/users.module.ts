@@ -1,6 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { mkdirSync } from 'node:fs';
-import { join } from 'node:path';
 import { Module } from '@nestjs/common';
 import { CqrsModule } from '@nestjs/cqrs';
 import { MulterModule } from '@nestjs/platform-express';
@@ -10,7 +8,7 @@ import { UPLOAD_DIR } from '../storage/storage.constants';
 import { CreateUserHandler } from './commands/handlers/create-user.handler';
 import { UpdateUserNameHandler } from './commands/handlers/update-user-name.handler';
 import { AvatarController } from './avatar/avatar.controller';
-import { AVATAR_SUBDIR, AvatarStorage } from './avatar/avatar-storage.service';
+import { AvatarStorage } from './avatar/avatar-storage.service';
 import { avatarFileFilter, MULTER_AVATAR_SIZE_LIMIT } from './avatar/avatar-upload-validation';
 import { UploadAvatarHandler } from './avatar/handlers/upload-avatar.handler';
 import { GetUserByEmailHandler } from './queries/handlers/get-user-by-email.handler';
@@ -31,19 +29,17 @@ import { UsersController } from './users.controller';
     // destination is created here too because multer does not make its own.
     MulterModule.registerAsync({
       inject: [UPLOAD_DIR],
-      useFactory: (uploadDir: string) => {
-        const dir = join(uploadDir, AVATAR_SUBDIR);
-        mkdirSync(dir, { recursive: true });
-        return {
-          storage: diskStorage({
-            destination: dir,
-            filename: (_req, _file, cb) => cb(null, randomUUID()),
-          }),
-          fileFilter: avatarFileFilter,
-          // See MULTER_AVATAR_SIZE_LIMIT: one byte past 5 MB, so exactly 5 MB passes.
-          limits: { fileSize: MULTER_AVATAR_SIZE_LIMIT, files: 1 },
-        };
-      },
+      // Destination comes from AvatarStorage's own rule (one place computes the path);
+      // AvatarStorage creates the directory at startup, before any request can arrive.
+      useFactory: (uploadDir: string) => ({
+        storage: diskStorage({
+          destination: AvatarStorage.directoryFor(uploadDir),
+          filename: (_req, _file, cb) => cb(null, randomUUID()),
+        }),
+        fileFilter: avatarFileFilter,
+        // See MULTER_AVATAR_SIZE_LIMIT: one byte past 5 MB, so exactly 5 MB passes.
+        limits: { fileSize: MULTER_AVATAR_SIZE_LIMIT, files: 1 },
+      }),
     }),
   ],
   controllers: [UsersController, AvatarController],

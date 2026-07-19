@@ -1,7 +1,7 @@
-import { createReadStream, mkdirSync, ReadStream } from 'node:fs';
-import { stat, unlink } from 'node:fs/promises';
+import { mkdirSync } from 'node:fs';
+import { unlink } from 'node:fs/promises';
 import { join } from 'node:path';
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { UPLOAD_DIR } from '../../storage/storage.constants';
 
 /**
@@ -23,8 +23,17 @@ export const AVATAR_SUBDIR = 'avatars';
 export class AvatarStorage {
   private readonly dir: string;
 
+  /**
+   * The avatars directory for a given UPLOAD_DIR. Static so the module's multer factory
+   * derives multer's write destination from the same rule this service uses for
+   * remove/cleanup — one place computes the path, so the two can never drift.
+   */
+  static directoryFor(uploadDir: string): string {
+    return join(uploadDir, AVATAR_SUBDIR);
+  }
+
   constructor(@Inject(UPLOAD_DIR) uploadDir: string) {
-    this.dir = join(uploadDir, AVATAR_SUBDIR);
+    this.dir = AvatarStorage.directoryFor(uploadDir);
     // Multer does not create its destination, so make it once at startup.
     mkdirSync(this.dir, { recursive: true });
   }
@@ -36,25 +45,6 @@ export class AvatarStorage {
 
   private pathFor(storedName: string): string {
     return join(this.dir, storedName);
-  }
-
-  /**
-   * Opens a stored avatar, refusing anything that no longer matches what was written —
-   * same reasoning as `MeetingFileStorage.open`: a missing path 404s here rather than
-   * raising ENOENT inside the stream once 200 is on the wire.
-   */
-  async open(storedName: string): Promise<ReadStream> {
-    const path = this.pathFor(storedName);
-    let stats;
-    try {
-      stats = await stat(path);
-    } catch {
-      throw new NotFoundException('Avatar content not found');
-    }
-    if (!stats.isFile()) {
-      throw new NotFoundException('Avatar content not found');
-    }
-    return createReadStream(path);
   }
 
   /** Best-effort removal: a missing file is already the desired end state. */

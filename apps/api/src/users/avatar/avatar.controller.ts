@@ -44,7 +44,9 @@ export class AvatarController {
 
     // The real content check the allowlist cannot do — a PDF renamed to .png passes the
     // filter but fails here. On rejection the just-written file is removed and the
-    // previous avatar is left untouched (the command never runs).
+    // previous avatar is left untouched (the command never runs). The thrown error is a
+    // 400 for a content mismatch; anything else (e.g. the file vanished — a programmer
+    // error per readAvatarImageType's precondition) surfaces as 500, which is correct.
     try {
       await readAvatarImageType(file.path);
     } catch (error) {
