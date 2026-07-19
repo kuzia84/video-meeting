@@ -109,3 +109,49 @@ test.describe('Profile — page & auth gating', () => {
     await expect(page).toHaveURL('/login');
   });
 });
+
+test.describe('Profile — avatar upload', () => {
+  // A valid PNG for the picker: the signature plus padding is enough — the API's content
+  // check sniffs only the leading bytes.
+  const PNG = Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    Buffer.alloc(64),
+  ]);
+
+  test('an uploaded picture shows in the profile and the header without a reload, and stays after a rename', async ({
+    page,
+    request,
+  }) => {
+    const user = await registerUser(request);
+    await signIn(page, user);
+    await page.goto('/profile');
+
+    const card = page.getByRole('main');
+    const header = page.getByRole('banner');
+
+    // Before any upload: the default letter circle in both places, no image.
+    await expect(card.getByTestId('default-avatar')).toBeVisible();
+    await expect(header.getByTestId('default-avatar')).toBeVisible();
+
+    // Upload straight into the (sr-only) file input — no reload follows.
+    await page
+      .locator('input[type="file"]')
+      .setInputFiles({ name: 'me.png', mimeType: 'image/png', buffer: PNG });
+
+    // The picture replaces the letter circle in the profile card and the header at once.
+    await expect(card.locator('img')).toBeVisible();
+    await expect(header.locator('img')).toBeVisible();
+    await expect(card.getByTestId('default-avatar')).toHaveCount(0);
+    await expect(header.getByTestId('default-avatar')).toHaveCount(0);
+
+    // Renaming must not bring the letter back — a set avatar stays a picture.
+    await page.getByRole('textbox', { name: 'Имя' }).fill('Пётр');
+    await page.getByRole('button', { name: 'Сохранить' }).click();
+
+    await expect(header.getByText('Пётр')).toBeVisible();
+    await expect(card.locator('img')).toBeVisible();
+    await expect(header.locator('img')).toBeVisible();
+    await expect(card.getByTestId('default-avatar')).toHaveCount(0);
+    await expect(header.getByTestId('default-avatar')).toHaveCount(0);
+  });
+});
