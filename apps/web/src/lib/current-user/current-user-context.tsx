@@ -43,10 +43,18 @@ export function CurrentUserProvider({ children }: { children: ReactNode }) {
   // The auth state (token value or null) the effect last acted on. Guards against
   // re-fetching the same token on every navigation, and — because it survives Strict
   // Mode's mount→unmount→remount on the same instance — against a duplicate initial
-  // fetch. `undefined` means "never handled yet".
+  // fetch. `undefined` means "never handled yet" (also reset to that on an error, so a
+  // later navigation retries a transient failure rather than the chip staying gone).
   const handledTokenRef = useRef<string | null | undefined>(undefined);
+  // Bumped on every load/reload; a resolving fetch commits its result only if it is
+  // still the latest. Without it, a logout (or any auth change) mid-fetch would let the
+  // stale in-flight `getProfile()` overwrite the fresh state with an authenticated user.
+  const requestIdRef = useRef(0);
 
   const load = useCallback(async (token: string | null) => {
+    const requestId = (requestIdRef.current += 1);
+    const isCurrent = () => requestId === requestIdRef.current;
+
     if (!token) {
       setUser(null);
       setStatus('unauthenticated');
@@ -55,14 +63,19 @@ export function CurrentUserProvider({ children }: { children: ReactNode }) {
     setStatus('loading');
     setErrorMessage(null);
     try {
-      setUser(await getProfile());
+      const profile = await getProfile();
+      if (!isCurrent()) return;
+      setUser(profile);
       setStatus('ready');
     } catch (err) {
+      if (!isCurrent()) return;
       if (err instanceof ApiError && err.status === 401) {
         setUser(null);
         setStatus('unauthenticated');
         return;
       }
+      // Let a later navigation reconcile again — don't leave this token "handled".
+      handledTokenRef.current = undefined;
       setErrorMessage(err instanceof Error ? err.message : 'Не удалось загрузить профиль.');
       setStatus('error');
     }
