@@ -7,6 +7,7 @@ import { DefaultAvatar } from '@/components/default-avatar';
 import { PageShell } from '@/components/page-shell';
 import { useCurrentUser } from '@/lib/current-user/current-user-context';
 import { removeAccessToken } from '@/lib/auth/token';
+import { AvatarUpload } from './avatar-upload';
 import { ProfileNameForm } from './profile-name-form';
 
 export function ProfileView() {
@@ -77,11 +78,16 @@ export function ProfileView() {
               colorName={user.avatarColor}
               className="h-16 w-16 text-2xl"
             />
-            <div className="flex flex-col gap-1">
-              <Card.Title>{displayName}</Card.Title>
-              {hasName ? null : (
-                <Card.Description>Имя пока не задано — показан email</Card.Description>
-              )}
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-1">
+                <Card.Title>{displayName}</Card.Title>
+                {hasName ? null : (
+                  <Card.Description>Имя пока не задано — показан email</Card.Description>
+                )}
+              </div>
+              {/* Uploading updates the shared user, so the new avatar shows here and in the
+                  header at once (the image itself is rendered in a later phase). */}
+              <AvatarUpload onUploaded={setUser} onUnauthorized={goToLogin} />
             </div>
           </div>
         </Card.Header>

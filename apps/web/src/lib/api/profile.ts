@@ -17,6 +17,13 @@ function authHeaders(): HeadersInit {
   };
 }
 
+/** Auth header without Content-Type — for multipart, where the browser must set the
+ *  boundary itself (setting Content-Type by hand produces a body the server can't parse). */
+function authHeadersNoContentType(): HeadersInit {
+  const token = getAccessToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 function assertProfile(data: Partial<UserProfile>): asserts data is UserProfile {
   if (!data.id || !data.email) {
     throw new Error('Сервер вернул некорректный ответ. Попробуйте ещё раз.');
@@ -41,6 +48,21 @@ export async function updateProfileName(name: string): Promise<UserProfile> {
     method: 'PATCH',
     headers: authHeaders(),
     body: JSON.stringify({ name }),
+  });
+  assertProfile(data);
+  return data;
+}
+
+// POST /users/me/avatar — upload a new avatar image (multipart). Returns the updated
+// profile (its avatarUrl now set). The API validates format/size/content and answers
+// with the reason verbatim on rejection, which surfaces as an ApiError.
+export async function uploadAvatar(file: File): Promise<UserProfile> {
+  const form = new FormData();
+  form.append('avatar', file);
+  const data = await fetchJson<Partial<UserProfile>>('/users/me/avatar', {
+    method: 'POST',
+    headers: authHeadersNoContentType(),
+    body: form,
   });
   assertProfile(data);
   return data;
