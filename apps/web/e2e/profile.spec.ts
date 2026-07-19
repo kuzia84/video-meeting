@@ -133,7 +133,13 @@ test.describe('Profile — avatar upload', () => {
     await expect(card.getByTestId('default-avatar')).toBeVisible();
     await expect(header.getByTestId('default-avatar')).toBeVisible();
 
-    // Upload straight into the (sr-only) file input — no reload follows.
+    // A sentinel on window: a full-document reload wipes it, so if the upload ever caused
+    // a reload this survives-check would fail — that is what pins "без перезагрузки".
+    await page.evaluate(() => {
+      (window as unknown as { __noReload?: boolean }).__noReload = true;
+    });
+
+    // Upload straight into the (sr-only) file input.
     await page
       .locator('input[type="file"]')
       .setInputFiles({ name: 'me.png', mimeType: 'image/png', buffer: PNG });
@@ -143,6 +149,11 @@ test.describe('Profile — avatar upload', () => {
     await expect(header.locator('img')).toBeVisible();
     await expect(card.getByTestId('default-avatar')).toHaveCount(0);
     await expect(header.getByTestId('default-avatar')).toHaveCount(0);
+    // The upload succeeded (no error alert), and it happened without a reload.
+    await expect(card.getByRole('alert')).toHaveCount(0);
+    expect(
+      await page.evaluate(() => (window as unknown as { __noReload?: boolean }).__noReload),
+    ).toBe(true);
 
     // Renaming must not bring the letter back — a set avatar stays a picture.
     await page.getByRole('textbox', { name: 'Имя' }).fill('Пётр');
