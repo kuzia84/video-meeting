@@ -21,10 +21,13 @@ export interface AuthResult {
 }
 
 // The signed-in user's own profile, returned by GET /users/me. `name` and
-// `avatarUrl` are null until the user sets them. Never carries passwordHash.
+// `avatarUrl` are null until the user sets them. `avatarColor` is the name of
+// the default-avatar colour solution (see AVATAR_COLOR_SOLUTIONS), always set.
+// Never carries passwordHash.
 export interface UserProfile {
   id: string;
   email: string;
   name: string | null;
   avatarUrl: string | null;
+  avatarColor: string;
 }

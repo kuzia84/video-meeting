@@ -1,5 +1,6 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import { AVATAR_COLOR_NAMES } from '@video-meetings/shared';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
@@ -57,6 +58,9 @@ describe('User profile endpoint (e2e)', () => {
     expect(typeof res.body.data.id).toBe('string');
     expect(res.body.data.name).toBeNull();
     expect(res.body.data.avatarUrl).toBeNull();
+    // A default-avatar colour is assigned at registration, so the profile
+    // always carries one — the name of a real palette solution.
+    expect(AVATAR_COLOR_NAMES).toContain(res.body.data.avatarColor);
     // The password hash must never leak over HTTP.
     expect(res.body.data.passwordHash).toBeUndefined();
   });
@@ -75,6 +79,21 @@ describe('User profile endpoint (e2e)', () => {
 
     expect(res.body.data.name).toBe('Богдан');
     expect(res.body.data.avatarUrl).toBe('a1b2c3d4.png');
+  });
+
+  it('returns the stored default-avatar colour name', async () => {
+    const token = await registerAndGetToken();
+    await prisma.user.update({
+      where: { email: credentials.email },
+      data: { avatarColor: 'teal' },
+    });
+
+    const res = await request(app.getHttpServer())
+      .get('/users/me')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    expect(res.body.data.avatarColor).toBe('teal');
   });
 
   it('rejects a request without a token with 401', async () => {
