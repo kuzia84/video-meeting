@@ -68,8 +68,10 @@ export function AppHeader() {
             // Avatar + name side by side; clicking the avatar opens the profile page.
             <NextLink
               href="/profile"
-              aria-label="Открыть профиль"
-              className="flex items-center gap-2 rounded-full outline-none focus-visible:ring-2"
+              // Accessible name contains the visible name (WCAG 2.5.3 Label in Name), so a
+              // speech-input user can still activate it by the name they see.
+              aria-label={`Профиль: ${displayName}`}
+              className="flex items-center gap-2 rounded-full outline-none focus-visible:ring-primary focus-visible:ring-2 focus-visible:ring-offset-2"
             >
               <DefaultAvatar
                 name={user.name}
