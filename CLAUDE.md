@@ -21,7 +21,7 @@ npm run dev          # turbo run dev — starts web (3000) and api (3001) concur
 npm run build         # turbo run build — builds shared, then api and web in parallel (^build dependency)
 npm run lint          # turbo run lint
 npm run lint:fix      # turbo run lint:fix
-npm run test          # turbo run test — unit tests; currently only apps/api has any
+npm run test          # turbo run test — unit tests; apps/api (jest) and packages/shared (jest/ts-jest) have them
 npm run clean         # turbo run clean
 npm run format        # prettier --write across the whole repo
 npm run format:check
@@ -57,7 +57,7 @@ npx jest --config ./test/jest-e2e.json   # e2e tests
 
 - **Package manager / workspaces**: npm workspaces (`apps/*`, `packages/*`) — a single `node_modules` at the root, with `@video-meetings/shared` symlinked into each app.
 - **Task orchestration**: `turbo.json` defines the task graph. `build`, `lint`, and `test` all `dependsOn: ["^build"]`, meaning `packages/shared` is built before dependent apps run those tasks. `dev` is uncached and persistent.
-- **Shared types package**: `packages/shared` has no build step consumed at dev time — both apps resolve it directly to TypeScript source via `tsconfig.json` path aliases (`"@video-meetings/shared": ["../../packages/shared/src"]`), not through a compiled `dist/`. Its own `build` script is just `tsc --noEmit` (a type-check, not a compile). When adding shared types, edit `packages/shared/src/index.ts` directly — no separate build/publish step is needed for the other workspaces to pick up the change.
+- **Shared types package**: `packages/shared` has no build step consumed at dev time — both apps resolve it directly to TypeScript source via `tsconfig.json` path aliases (`"@video-meetings/shared": ["../../packages/shared/src"]`), not through a compiled `dist/`. Its own `build` script is just `tsc --noEmit` (a type-check, not a compile). When adding shared types, edit `packages/shared/src/index.ts` directly — no separate build/publish step is needed for the other workspaces to pick up the change. Beyond types, it also holds framework-agnostic constants and pure logic shared by both apps — e.g. `avatar-palette.ts`, the set of default-avatar colour solutions (each with a stable `name` plus light/dark variants), which the backend picks from by name and the frontend maps back to colours. The package has its own jest/ts-jest unit tests (`*.spec.ts`, run by `npm run test`) so that shared logic can be tested at the source of truth.
 - **TypeScript config layering**: `tsconfig.base.json` at the root sets strict-mode defaults (`strict`, `ES2022` target, declaration output). Each workspace's `tsconfig.json` extends it and overrides `module`/`moduleResolution` for its runtime (NestJS uses CommonJS/node resolution; Next.js uses ESNext/bundler resolution).
 - **ESLint config layering**: the root `.eslintrc.js` defines base `@typescript-eslint` rules. `apps/api/.eslintrc.js` and `apps/web/.eslintrc.js` each set `root: true` and extend/override with framework-specific plugins (NestJS + Prettier integration in `api`; `next/core-web-vitals` + `next/typescript` in `web`) rather than inheriting the root config directly.
 - **Single Prettier config**: `.prettierrc` at the root applies repo-wide; there is no per-app Prettier config.
