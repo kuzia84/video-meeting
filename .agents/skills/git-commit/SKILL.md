@@ -92,20 +92,40 @@ Analyze the diff to determine:
 
 ### 4. Execute Commit
 
+**Single line** — safe everywhere:
+
 ```bash
-# Single line
 git commit -m "<type>[scope]: <description>"
-
-# Multi-line with body/footer
-git commit -m "$(cat <<'EOF'
-<type>[scope]: <description>
-
-<optional body>
-
-<optional footer>
-EOF
-)"
 ```
+
+**Multi-line (body/footer): write the message to a file, then commit with `-F`.**
+Do NOT build a multi-line message with a shell here-string/heredoc. This repo's
+default shell is **PowerShell** (Windows), whose here-strings are `@'...'@` /
+`@"..."@`; their `@` delimiters leak into the message when the closing `'@` is
+not at column 0, and the commit subject becomes a lone `@`. A `commit-msg` hook
+rejects that, but avoid it in the first place:
+
+1. Write the full message to a file with the editor/Write tool (not by echoing
+   through the shell) — e.g. `.git/COMMIT_EDITMSG` or a temp file:
+
+   ```
+   <type>[scope]: <description>
+
+   <optional body>
+
+   <optional footer>
+   ```
+
+2. Commit from that file:
+
+   ```bash
+   git commit -F <path-to-message-file>
+   ```
+
+`git commit -F` takes the message verbatim from the file, so no shell quoting,
+heredoc, or here-string is involved — it behaves identically under Bash and
+PowerShell. Only fall back to a Bash heredoc (`git commit -F - <<'EOF' … EOF`)
+when you are certain the command runs in Bash, never PowerShell.
 
 ## Best Practices
 
