@@ -3,8 +3,8 @@
 import { Button, Card, Input, Label, TextField } from '@heroui/react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect } from 'react';
-import { DefaultAvatar } from '@/components/default-avatar';
 import { PageShell } from '@/components/page-shell';
+import { UserAvatar } from '@/components/user-avatar';
 import { useCurrentUser } from '@/lib/current-user/current-user-context';
 import { removeAccessToken } from '@/lib/auth/token';
 import { AvatarUpload } from './avatar-upload';
@@ -70,12 +70,13 @@ export function ProfileView() {
       <Card className="w-full max-w-sm">
         <Card.Header>
           <div className="flex items-center gap-4">
-            {/* No uploaded picture yet (that arrives in a later phase), so the
-                default circle — the user's initial in their own colour — stands in. */}
-            <DefaultAvatar
+            {/* The uploaded picture when there is one, otherwise the default circle —
+                the user's initial in their own colour. */}
+            <UserAvatar
               name={user.name}
               email={user.email}
               colorName={user.avatarColor}
+              avatarUrl={user.avatarUrl}
               className="h-16 w-16 text-2xl"
             />
             <div className="flex flex-col gap-2">

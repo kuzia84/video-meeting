@@ -3,8 +3,8 @@
 import { Button } from '@heroui/react';
 import NextLink from 'next/link';
 import { useRouter } from 'next/navigation';
-import { DefaultAvatar } from '@/components/default-avatar';
 import { Logo } from '@/components/logo';
+import { UserAvatar } from '@/components/user-avatar';
 import { useCurrentUser } from '@/lib/current-user/current-user-context';
 import { removeAccessToken } from '@/lib/auth/token';
 
@@ -50,10 +50,11 @@ export function AppHeader() {
               aria-label={`Профиль: ${displayName}`}
               className="flex items-center gap-2 rounded-full outline-none focus-visible:ring-primary focus-visible:ring-2 focus-visible:ring-offset-2"
             >
-              <DefaultAvatar
+              <UserAvatar
                 name={user.name}
                 email={user.email}
                 colorName={user.avatarColor}
+                avatarUrl={user.avatarUrl}
                 className="h-8 w-8 text-sm"
               />
               <span className="max-w-40 truncate text-sm font-medium">{displayName}</span>

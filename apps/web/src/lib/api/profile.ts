@@ -1,5 +1,5 @@
 import type { UserProfile } from '@video-meetings/shared';
-import { fetchJson } from './client';
+import { fetchBlob, fetchJson } from './client';
 import { getAccessToken } from '@/lib/auth/token';
 
 export { ApiError } from './client';
@@ -66,4 +66,11 @@ export async function uploadAvatar(file: File): Promise<UserProfile> {
   });
   assertProfile(data);
   return data;
+}
+
+// GET /users/me/avatar — the avatar bytes. The route is JWT-guarded, so the token can
+// only travel as a header (a plain <img src> sends none); fetch the blob here and let the
+// caller turn it into an object URL, the same shape as downloadMeetingFile.
+export async function fetchAvatarBlob(): Promise<Blob> {
+  return fetchBlob('/users/me/avatar', { headers: authHeadersNoContentType() });
 }
