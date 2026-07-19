@@ -13,6 +13,11 @@ model User {
   passwordHash String
   name         String?
   avatarUrl    String?
+  // Name of the default-avatar colour solution assigned to this user (see
+  // AVATAR_COLOR_SOLUTIONS in @video-meetings/shared). Required and stable: set
+  // once at registration (backfilled for pre-existing users) so the circle keeps
+  // the same colour across reloads and re-logins.
+  avatarColor  String
   createdAt    DateTime  @default(now())
   meetings     Meeting[]
 }

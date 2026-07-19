@@ -1,5 +1,7 @@
 import {
+  AVATAR_COLOR_NAMES,
   AVATAR_COLOR_SOLUTIONS,
+  pickAvatarColorName,
   type AvatarColorSolution,
   type AvatarColorVariant,
 } from './avatar-palette';
@@ -93,4 +95,39 @@ describe('AVATAR_COLOR_SOLUTIONS', () => {
       });
     },
   );
+});
+
+describe('pickAvatarColorName', () => {
+  it('always returns the name of a real solution', () => {
+    // Sweep the whole [0, 1) range the RNG can produce.
+    for (let i = 0; i < 100; i += 1) {
+      const name = pickAvatarColorName(() => i / 100);
+      expect(AVATAR_COLOR_NAMES).toContain(name);
+    }
+  });
+
+  it('maps the bottom of the range to the first solution', () => {
+    expect(pickAvatarColorName(() => 0)).toBe(AVATAR_COLOR_SOLUTIONS[0].name);
+  });
+
+  it('never overflows when the RNG returns its maximum value', () => {
+    // Math.random() never returns 1, but an injected source might; the pick
+    // must still land on the last solution, not read past the array.
+    const last = AVATAR_COLOR_SOLUTIONS[AVATAR_COLOR_SOLUTIONS.length - 1].name;
+    expect(pickAvatarColorName(() => 0.999999999)).toBe(last);
+    expect(pickAvatarColorName(() => 1)).toBe(last);
+  });
+
+  it('can reach every solution', () => {
+    const reached = new Set(
+      AVATAR_COLOR_SOLUTIONS.map((_, i) =>
+        pickAvatarColorName(() => i / AVATAR_COLOR_SOLUTIONS.length),
+      ),
+    );
+    expect(reached.size).toBe(AVATAR_COLOR_SOLUTIONS.length);
+  });
+
+  it('defaults to Math.random and returns a valid name', () => {
+    expect(AVATAR_COLOR_NAMES).toContain(pickAvatarColorName());
+  });
 });

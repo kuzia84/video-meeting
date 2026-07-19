@@ -82,3 +82,16 @@ export const AVATAR_COLOR_NAMES: readonly string[] = AVATAR_COLOR_SOLUTIONS.map(
 export function findAvatarColorSolution(name: string): AvatarColorSolution | undefined {
   return AVATAR_COLOR_SOLUTIONS.find((solution) => solution.name === name);
 }
+
+/**
+ * Pick a colour solution's name, used to assign a default avatar to a new user.
+ * `random` defaults to `Math.random`; inject a source for deterministic tests.
+ * The result is clamped to a valid index, so a `random()` of exactly 1 (which
+ * `Math.random` never returns, but an injected source might) still resolves to
+ * the last solution rather than reading past the array.
+ */
+export function pickAvatarColorName(random: () => number = Math.random): string {
+  const raw = Math.floor(random() * AVATAR_COLOR_SOLUTIONS.length);
+  const index = Math.min(Math.max(raw, 0), AVATAR_COLOR_SOLUTIONS.length - 1);
+  return AVATAR_COLOR_SOLUTIONS[index].name;
+}
