@@ -51,6 +51,13 @@ export function avatarContentMismatchMessage(): string {
  *
  * Only the head is read — the file may be up to the size cap, and the signature lives at
  * the front — so this stays cheap regardless of file size.
+ *
+ * Note the scope: this confirms the *header*, not that the whole image decodes — a
+ * truncated or crafted file with a valid 12-byte head passes, which is the accepted depth
+ * (uploads are never decoded/executed and only the owner reads them back, same compromise
+ * as meeting files). Precondition: `path` must exist — the caller (#88) runs this on the
+ * file multer already wrote, so a missing path is a programmer error (surfaces as 500),
+ * not a client one.
  */
 export async function readAvatarImageType(path: string): Promise<AvatarImageType> {
   const handle = await open(path, 'r');

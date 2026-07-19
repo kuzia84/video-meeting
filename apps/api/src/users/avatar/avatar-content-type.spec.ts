@@ -79,6 +79,14 @@ describe('readAvatarImageType', () => {
     await expect(readAvatarImageType(path)).resolves.toBe('image/png');
   });
 
+  it.each([
+    ['ok.jpg', JPEG_HEAD, 'image/jpeg'],
+    ['ok.webp', WEBP_HEAD, 'image/webp'],
+  ])('reads %s from disk as %s', async (name, head, expected) => {
+    const path = await writeTemp(name, Buffer.concat([head, Buffer.alloc(50)]));
+    await expect(readAvatarImageType(path)).resolves.toBe(expected);
+  });
+
   it('rejects a PDF renamed to .png with a clear, Russian message', async () => {
     const path = await writeTemp('fake.png', Buffer.concat([PDF_HEAD, Buffer.alloc(50)]));
     await expect(readAvatarImageType(path)).rejects.toBeInstanceOf(BadRequestException);
