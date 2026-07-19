@@ -27,18 +27,29 @@ describe('avatar upload validation', () => {
   });
 
   it('names the 5 MB limit in the too-large message', () => {
-    expect(avatarTooLargeMessage()).toContain('5');
+    expect(avatarTooLargeMessage()).toContain('5 МБ');
   });
 
   it.each([
     ['photo.jpg', 'image/jpeg'],
     ['photo.jpeg', 'image/jpeg'],
+    ['photo.jpg', 'image/jpg'], // a few clients send the non-standard image/jpg
     ['PHOTO.JPG', 'image/jpeg'],
-    ['avatar.png', 'image/png'],
+    ['avatar.png', 'IMAGE/PNG'], // mimetype match is case-insensitive
     ['avatar.webp', 'image/webp'],
     ['фото.png', 'image/png'],
   ])('accepts %s (%s)', (name, mime) => {
     const { error, accept } = runFilter(name, mime);
+    expect(error).toBeNull();
+    expect(accept).toBe(true);
+  });
+
+  it('reads the extension through busboy latin1 mangling of a non-ASCII name', () => {
+    // busboy decodes the multipart filename as latin1; a UTF-8 Cyrillic base name arrives
+    // mojibake'd, but the ASCII `.png` survives — so the filter still accepts it.
+    const mangled = Buffer.from('фото.png', 'utf8').toString('latin1');
+    expect(mangled).not.toBe('фото.png'); // guards the test itself: it really is mangled
+    const { error, accept } = runFilter(mangled, 'image/png');
     expect(error).toBeNull();
     expect(accept).toBe(true);
   });

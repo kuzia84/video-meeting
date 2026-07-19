@@ -23,9 +23,11 @@ const ALLOWED_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
  * purpose: a browser file picker reliably reports `image/jpeg|png|webp`, so there is no
  * need to wave through `application/octet-stream` here. This is still only hygiene —
  * `mimetype` and the extension are both client-written; the real content check (magic
- * bytes) is a separate, later step, not this filter.
+ * bytes) is a separate, later step, not this filter. `image/jpg` is included alongside
+ * the canonical `image/jpeg` because a few clients still send the non-standard form, and
+ * rejecting a genuine JPEG over a header spelling would be a confusing refusal.
  */
-const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
 
 const ALLOWED_LIST = 'JPEG, PNG, WebP';
 
