@@ -4,7 +4,7 @@
 // Юнит-тесты чистых функций Ralph-хука. Запуск: `node .claude/hooks/stop.test.js`.
 // Свой раннер, без jest: .claude/hooks не подключён к тестам репозитория.
 
-const { decide, fill, selectActive } = require('./stop.js');
+const { decide, fill, selectActive, chainFromConfig } = require('./stop.js');
 
 let pass = 0;
 let fail = 0;
@@ -49,6 +49,20 @@ eq(
   'один milestone',
 );
 eq(selectActive([]), { activeMilestone: null, nextIssue: null, totalOpen: 0 }, 'пустая цепочка');
+
+console.log('--- chainFromConfig: цепочка под любым ключом, массив или строка ---');
+eq(chainFromConfig({ milestones: ['A', 'B'] }), ['A', 'B'], 'milestones массив');
+eq(chainFromConfig({ milestone: ['A', 'B'] }), ['A', 'B'], 'milestone массив (не роняет хук)');
+eq(chainFromConfig({ milestone: 'Solo' }), ['Solo'], 'milestone строка (обр. совместимость)');
+eq(chainFromConfig({ milestones: 'Solo' }), ['Solo'], 'milestones строка');
+eq(chainFromConfig({ milestones: ['A'], milestone: 'ign' }), ['A'], 'milestones главнее milestone');
+eq(chainFromConfig({ milestone: '' }), [], 'пустая строка → []');
+eq(chainFromConfig({}), [], 'нет ключей → []');
+eq(
+  chainFromConfig({ milestone: ['A', '', '  ', null, 'B'] }),
+  ['A', 'B'],
+  'пустые/null отсеиваются',
+);
 
 console.log('--- decide: стал/лимит/сессия/итерации ---');
 const CAP = 1500000;
