@@ -3,11 +3,10 @@
 import { Button } from '@heroui/react';
 import NextLink from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
 import { DefaultAvatar } from '@/components/default-avatar';
 import { Logo } from '@/components/logo';
-import { getProfile, type UserProfile } from '@/lib/api/profile';
-import { getAccessToken, removeAccessToken } from '@/lib/auth/token';
+import { useCurrentUser } from '@/lib/current-user/current-user-context';
+import { removeAccessToken } from '@/lib/auth/token';
 
 /**
  * The header every signed-in page wears.
@@ -18,36 +17,14 @@ import { getAccessToken, removeAccessToken } from '@/lib/auth/token';
  *
  * It shows the current user beside the logout button — the default avatar (or, later,
  * an uploaded picture) with the display name next to it, the avatar linking to the
- * profile page. It fetches the profile itself; a single shared source that also lets a
- * rename here update live without a reload arrives in a later phase. On any failure it
- * stays a bare logo + logout, since the page around it owns auth outcomes, not the header.
+ * profile page. The user comes from the shared `useCurrentUser` source (not a fetch of
+ * its own), so a rename on the profile page updates this chip live, with no reload. When
+ * there is no user yet (loading, signed out, or a failed load) it stays a bare logo +
+ * logout, since the page around it owns auth outcomes, not the header.
  */
 export function AppHeader() {
   const router = useRouter();
-  const [user, setUser] = useState<UserProfile | null>(null);
-
-  // React Strict Mode runs effects twice in dev; guard the one-time fetch.
-  const startedRef = useRef(false);
-
-  useEffect(() => {
-    // Guard the one fetch with a ref (not a cleanup flag): Strict Mode's mount →
-    // unmount → remount would otherwise cancel the only in-flight request and, with
-    // the ref already set, never start another. Same shape as the profile view.
-    if (startedRef.current) return;
-    startedRef.current = true;
-
-    // No token → the page's own guard is already redirecting; don't fetch.
-    if (!getAccessToken()) return;
-
-    void (async () => {
-      try {
-        setUser(await getProfile());
-      } catch {
-        // Swallow: the page owns the redirect on a 401 and its own error UI on the
-        // rest. The header simply stays without the user chip rather than fighting it.
-      }
-    })();
-  }, []);
+  const { user } = useCurrentUser();
 
   function handleLogout() {
     removeAccessToken();
