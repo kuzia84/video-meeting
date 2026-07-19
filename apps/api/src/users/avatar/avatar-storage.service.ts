@@ -1,8 +1,13 @@
-import { mkdirSync } from 'node:fs';
-import { unlink } from 'node:fs/promises';
+import { createReadStream, mkdirSync, ReadStream } from 'node:fs';
+import { open, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { UPLOAD_DIR } from '../../storage/storage.constants';
+import {
+  AVATAR_CONTENT_HEAD_BYTES,
+  AvatarImageType,
+  detectAvatarImageType,
+} from './avatar-content-type';
 
 /**
  * Avatars live in this subdirectory of UPLOAD_DIR, apart from meeting files. Two reasons:
@@ -45,6 +50,38 @@ export class AvatarStorage {
 
   private pathFor(storedName: string): string {
     return join(this.dir, storedName);
+  }
+
+  /**
+   * Opens a stored avatar for serving, returning both the byte stream and the content type
+   * read back from the file's own magic bytes — the authoritative type, since no column
+   * records it. A missing file, or bytes that no longer look like a supported image (the
+   * file was corrupted or wiped), 404s here rather than letting `createReadStream` raise
+   * ENOENT inside the stream once 200 is already on the wire — the same reasoning as
+   * `MeetingFileStorage.open`.
+   */
+  async open(storedName: string): Promise<{ stream: ReadStream; contentType: AvatarImageType }> {
+    const path = this.pathFor(storedName);
+
+    let handle;
+    try {
+      handle = await open(path, 'r');
+    } catch {
+      throw new NotFoundException('Avatar content not found');
+    }
+    let contentType: AvatarImageType | null;
+    try {
+      const head = Buffer.alloc(AVATAR_CONTENT_HEAD_BYTES);
+      const { bytesRead } = await handle.read(head, 0, AVATAR_CONTENT_HEAD_BYTES, 0);
+      contentType = detectAvatarImageType(head.subarray(0, bytesRead));
+    } finally {
+      await handle.close();
+    }
+    if (!contentType) {
+      throw new NotFoundException('Avatar content not found');
+    }
+
+    return { stream: createReadStream(path), contentType };
   }
 
   /** Best-effort removal: a missing file is already the desired end state. */

@@ -2,6 +2,7 @@ import { mkdir, readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import type { Response } from 'superagent';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
@@ -17,6 +18,14 @@ const PNG_BYTES = Buffer.concat([
   Buffer.alloc(64),
 ]);
 const PDF_BYTES = Buffer.concat([Buffer.from('%PDF-1.7\n', 'ascii'), Buffer.alloc(64)]);
+
+/** supertest parses no body for an image content type; collect the raw bytes instead. */
+function binaryParser(res: Response, cb: (err: Error | null, body: Buffer) => void): void {
+  const chunks: Buffer[] = [];
+  res.on('data', (chunk: Buffer) => chunks.push(chunk));
+  res.on('end', () => cb(null, Buffer.concat(chunks)));
+  res.on('error', (err: Error) => cb(err, Buffer.alloc(0)));
+}
 
 describe('Avatar upload (e2e)', () => {
   let app: INestApplication;
@@ -124,5 +133,39 @@ describe('Avatar upload (e2e)', () => {
     // rejected upload was cleaned up, not left behind).
     expect(await getAvatarUrl(token)).toBe(stored);
     expect(await readdir(avatarDir)).toEqual([stored]);
+  });
+
+  describe('serving the avatar back', () => {
+    it('streams the uploaded bytes with the sniffed content type', async () => {
+      const token = await registerUser();
+      await request(app.getHttpServer())
+        .post('/users/me/avatar')
+        .set('Authorization', `Bearer ${token}`)
+        .attach('avatar', PNG_BYTES, { filename: 'me.png', contentType: 'image/png' })
+        .expect(201);
+
+      const res = await request(app.getHttpServer())
+        .get('/users/me/avatar')
+        .set('Authorization', `Bearer ${token}`)
+        .buffer()
+        .parse(binaryParser)
+        .expect(200);
+
+      expect(res.headers['content-type']).toContain('image/png');
+      expect(res.headers['x-content-type-options']).toBe('nosniff');
+      expect(res.body).toEqual(PNG_BYTES);
+    });
+
+    it('404s when the user has no avatar', async () => {
+      const token = await registerUser();
+      await request(app.getHttpServer())
+        .get('/users/me/avatar')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(404);
+    });
+
+    it('401s without a token — the avatar is not public', async () => {
+      await request(app.getHttpServer()).get('/users/me/avatar').expect(401);
+    });
   });
 });
