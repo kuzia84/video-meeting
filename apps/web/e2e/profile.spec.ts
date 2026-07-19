@@ -63,7 +63,7 @@ test.describe('Profile — page & auth gating', () => {
 
     await page.goto('/profile');
 
-    const header = page.locator('header');
+    const header = page.getByRole('banner');
     const headerAvatar = header.getByTestId('default-avatar');
     // Before the rename: no name yet, so the header shows the email initial, and the
     // circle already has its stored colour — captured here to prove it does not change.
@@ -79,7 +79,9 @@ test.describe('Profile — page & auth gating', () => {
     // letter, the card title updated too — all without a reload.
     await expect(header.getByText('Николай')).toBeVisible();
     await expect(headerAvatar).toHaveText('Н');
-    await expect(page.getByRole('heading', { level: 3, name: 'Николай' })).toBeVisible();
+    await expect(
+      page.getByRole('main').getByRole('heading', { level: 3, name: 'Николай' }),
+    ).toBeVisible();
 
     // The circle colour did not change with the name.
     const colourAfter = await headerAvatar.evaluate((el) => getComputedStyle(el).backgroundColor);
