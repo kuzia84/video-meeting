@@ -32,7 +32,8 @@ test.describe('Profile — page & auth gating', () => {
 
     await page.goto('/profile');
 
-    const avatar = page.getByTestId('default-avatar');
+    // The header also carries a default-avatar now, so scope to the card's (in <main>).
+    const avatar = page.getByRole('main').getByTestId('default-avatar');
     await expect(avatar).toBeVisible();
     // No name yet → the letter comes from the email. Test emails start with "e2e-".
     await expect(avatar).toHaveText('E');
@@ -41,7 +42,7 @@ test.describe('Profile — page & auth gating', () => {
     const colourBefore = await avatar.evaluate((el) => getComputedStyle(el).backgroundColor);
     await page.reload();
 
-    const avatarAfter = page.getByTestId('default-avatar');
+    const avatarAfter = page.getByRole('main').getByTestId('default-avatar');
     await expect(avatarAfter).toHaveText('E');
     const colourAfter = await avatarAfter.evaluate((el) => getComputedStyle(el).backgroundColor);
     expect(colourAfter).toBe(colourBefore);
@@ -51,6 +52,46 @@ test.describe('Profile — page & auth gating', () => {
     await page.goto('/profile');
 
     await expect(page).toHaveURL('/login');
+  });
+
+  test('a saved name shows in the header with its initial, keeps the circle colour, and survives a reload', async ({
+    page,
+    request,
+  }) => {
+    const user = await registerUser(request);
+    await signIn(page, user);
+
+    await page.goto('/profile');
+
+    const header = page.locator('header');
+    const headerAvatar = header.getByTestId('default-avatar');
+    // Before the rename: no name yet, so the header shows the email initial, and the
+    // circle already has its stored colour — captured here to prove it does not change.
+    await expect(headerAvatar).toHaveText('E');
+    const colourBefore = await headerAvatar.evaluate((el) => getComputedStyle(el).backgroundColor);
+
+    // Rename to a name whose first letter differs from the email initial, so the letter
+    // change is observable (and Cyrillic, to exercise the uppercasing).
+    await page.getByRole('textbox', { name: 'Имя' }).fill('Николай');
+    await page.getByRole('button', { name: 'Сохранить' }).click();
+
+    // The name is now visible in the header, the avatar letter switched to its first
+    // letter, the card title updated too — all without a reload.
+    await expect(header.getByText('Николай')).toBeVisible();
+    await expect(headerAvatar).toHaveText('Н');
+    await expect(page.getByRole('heading', { level: 3, name: 'Николай' })).toBeVisible();
+
+    // The circle colour did not change with the name.
+    const colourAfter = await headerAvatar.evaluate((el) => getComputedStyle(el).backgroundColor);
+    expect(colourAfter).toBe(colourBefore);
+
+    // It survives a reload (the name is persisted, not just held in memory): still in the
+    // header, same letter, same colour.
+    await page.reload();
+    await expect(header.getByText('Николай')).toBeVisible();
+    await expect(headerAvatar).toHaveText('Н');
+    const colourReload = await headerAvatar.evaluate((el) => getComputedStyle(el).backgroundColor);
+    expect(colourReload).toBe(colourBefore);
   });
 
   test('sends a visitor whose token the API rejects to login', async ({ page }) => {
