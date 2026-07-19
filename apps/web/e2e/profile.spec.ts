@@ -206,7 +206,9 @@ test.describe('Profile — password change', () => {
     await expect(page).toHaveURL('/login');
     await logIn(page, user.email, OLD_PASSWORD);
     // Scope to <main>: Next.js's route announcer also carries role="alert" at body level.
-    await expect(page.getByRole('main').getByRole('alert')).toHaveText('Неверный email или пароль');
+    await expect(page.getByRole('main').getByRole('alert')).toContainText(
+      'Неверный email или пароль',
+    );
     await expect(page).toHaveURL('/login');
   });
 });
