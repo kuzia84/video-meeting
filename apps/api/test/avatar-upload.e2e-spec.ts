@@ -153,7 +153,18 @@ describe('Avatar upload (e2e)', () => {
 
       expect(res.headers['content-type']).toContain('image/png');
       expect(res.headers['x-content-type-options']).toBe('nosniff');
+      expect(res.headers['cache-control']).toBe('private, no-cache');
       expect(res.body).toEqual(PNG_BYTES);
+    });
+
+    it('401s for a valid token whose account was since deleted', async () => {
+      const token = await registerUser();
+      await prisma.user.deleteMany();
+
+      await request(app.getHttpServer())
+        .get('/users/me/avatar')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(401);
     });
 
     it('404s when the user has no avatar', async () => {

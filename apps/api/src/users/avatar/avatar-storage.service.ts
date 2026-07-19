@@ -58,7 +58,10 @@ export class AvatarStorage {
    * records it. A missing file, or bytes that no longer look like a supported image (the
    * file was corrupted or wiped), 404s here rather than letting `createReadStream` raise
    * ENOENT inside the stream once 200 is already on the wire — the same reasoning as
-   * `MeetingFileStorage.open`.
+   * `MeetingFileStorage.open`. A tiny residual window remains — the file could be unlinked
+   * between this check and the stream opening — but avatars are immutable (a replace writes
+   * a new UUID and only unlinks the *previous* name), so it is as narrow as the meeting-file
+   * case and left as accepted.
    */
   async open(storedName: string): Promise<{ stream: ReadStream; contentType: AvatarImageType }> {
     const path = this.pathFor(storedName);
