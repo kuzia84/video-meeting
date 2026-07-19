@@ -166,3 +166,47 @@ test.describe('Profile — avatar upload', () => {
     await expect(header.getByTestId('default-avatar')).toHaveCount(0);
   });
 });
+
+test.describe('Profile — password change', () => {
+  // registerUser (support.ts) always registers with this password.
+  const OLD_PASSWORD = 'password123';
+  const NEW_PASSWORD = 'NewPass456!';
+
+  async function logIn(page: import('@playwright/test').Page, email: string, password: string) {
+    await page.locator('input[name="email"]').fill(email);
+    await page.locator('input[name="password"]').fill(password);
+    await page.getByRole('button', { name: 'Войти' }).click();
+  }
+
+  test('after a change, login works with the new password and not the old', async ({
+    page,
+    request,
+  }) => {
+    const user = await registerUser(request);
+    await signIn(page, user);
+    await page.goto('/profile');
+
+    // Change the password via the form.
+    await page.locator('input[name="currentPassword"]').fill(OLD_PASSWORD);
+    await page.locator('input[name="newPassword"]').fill(NEW_PASSWORD);
+    await page.locator('input[name="confirmPassword"]').fill(NEW_PASSWORD);
+    await page.getByRole('button', { name: 'Сменить пароль' }).click();
+    await expect(page.getByText('Пароль изменён')).toBeVisible();
+    // The fields are cleared so the passwords don't linger in the form.
+    await expect(page.locator('input[name="currentPassword"]')).toHaveValue('');
+
+    // Sign out, then the NEW password logs in — reaching the authenticated home.
+    await page.getByRole('banner').getByRole('button', { name: 'Выйти' }).click();
+    await expect(page).toHaveURL('/login');
+    await logIn(page, user.email, NEW_PASSWORD);
+    await expect(page).toHaveURL('/');
+
+    // Sign out again; the OLD password is now rejected and the login stays put.
+    await page.getByRole('banner').getByRole('button', { name: 'Выйти' }).click();
+    await expect(page).toHaveURL('/login');
+    await logIn(page, user.email, OLD_PASSWORD);
+    // Scope to <main>: Next.js's route announcer also carries role="alert" at body level.
+    await expect(page.getByRole('main').getByRole('alert')).toHaveText('Неверный email или пароль');
+    await expect(page).toHaveURL('/login');
+  });
+});
