@@ -7,6 +7,8 @@ import { ApiError, changePassword } from '@/lib/api/profile';
 // Mirrors the API's registration rule (see IsPassword on the backend). Kept in sync by
 // hand — a client-side check gives an instant Russian message; the server is the authority.
 const PASSWORD_MIN = 8;
+// bcrypt only considers the first 72 bytes, so the backend caps the password there too.
+const PASSWORD_MAX = 72;
 
 /**
  * The password-change form on the profile page: current password, new, and confirm-new.
@@ -54,6 +56,8 @@ export function PasswordChangeForm({ onUnauthorized }: { onUnauthorized: () => v
     if (!currentPassword) errors.currentPassword = 'Введите текущий пароль';
     if (newPassword.length < PASSWORD_MIN) {
       errors.newPassword = `Пароль должен быть не короче ${PASSWORD_MIN} символов`;
+    } else if (newPassword.length > PASSWORD_MAX) {
+      errors.newPassword = `Пароль должен быть не длиннее ${PASSWORD_MAX} символов`;
     }
     if (confirmPassword !== newPassword) errors.confirmPassword = 'Пароли не совпадают';
 
@@ -97,7 +101,7 @@ export function PasswordChangeForm({ onUnauthorized }: { onUnauthorized: () => v
       <h2 className="text-lg font-semibold tracking-tight">Смена пароля</h2>
 
       {formError ? (
-        <Alert status="danger" role="alert">
+        <Alert status="danger" role="alert" aria-live="assertive">
           <Alert.Indicator />
           <Alert.Content>
             <Alert.Description>{formError}</Alert.Description>
