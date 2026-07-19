@@ -8,6 +8,7 @@ import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { UPLOAD_DIR } from '../src/storage/storage.constants';
 import { AVATAR_SUBDIR } from '../src/users/avatar/avatar-storage.service';
+import { avatarTooLargeMessage } from '../src/users/avatar/avatar-upload-validation';
 import { assertE2eDatabase } from './e2e-database';
 import './setup-e2e';
 
@@ -113,6 +114,23 @@ describe('Avatar upload (e2e)', () => {
     },
   );
 
+  it('accepts a file of exactly 5 MB — the boundary the +1 in the size limit guards', async () => {
+    const token = await registerUser();
+    // Total length is exactly 5 * 1024 * 1024; busboy trips at limit+1, so this must pass.
+    const exact = Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      Buffer.alloc(5 * 1024 * 1024 - 8),
+    ]);
+    expect(exact.length).toBe(5 * 1024 * 1024);
+
+    const res = await request(app.getHttpServer())
+      .post('/users/me/avatar')
+      .set('Authorization', `Bearer ${token}`)
+      .attach('avatar', exact, { filename: 'exact.png', contentType: 'image/png' })
+      .expect(201);
+    expect(await readdir(avatarDir)).toEqual([res.body.data.avatarUrl]);
+  });
+
   it('rejects a file larger than 5 MB with a message naming the limit, leaving the previous avatar', async () => {
     const token = await registerUser();
     const first = await request(app.getHttpServer())
@@ -133,7 +151,7 @@ describe('Avatar upload (e2e)', () => {
       .set('Authorization', `Bearer ${token}`)
       .attach('avatar', tooBig, { filename: 'big.png', contentType: 'image/png' })
       .expect(413);
-    expect(res.body.message).toContain('5 МБ');
+    expect(res.body.message).toBe(avatarTooLargeMessage());
 
     // The previous avatar is untouched, and the oversized upload left nothing behind.
     expect(await getAvatarUrl(token)).toBe(stored);
