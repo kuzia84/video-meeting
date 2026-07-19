@@ -8,17 +8,7 @@ import { AuthUser } from '../auth/auth.types';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdateUserNameCommand } from './commands/update-user-name.command';
 import { GetUserByIdQuery } from './queries/get-user-by-id.query';
-
-// Narrows the Prisma User to the public profile — passwordHash never leaves here.
-function toProfile(user: User): UserProfile {
-  return {
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    avatarUrl: user.avatarUrl,
-    avatarColor: user.avatarColor,
-  };
-}
+import { toProfile } from './to-profile';
 
 @UseGuards(JwtAuthGuard)
 @Controller('users')

@@ -44,11 +44,18 @@ function uploadDir(): string {
   return isAbsolute(configured) ? configured : join(process.cwd(), configured);
 }
 
+/** Mirrors `AVATAR_SUBDIR` in src/users/avatar/avatar-storage.service.ts. */
+const AVATAR_SUBDIR = 'avatars';
+
 /** Deletes the e2e accounts, taking their bytes with them — the cascade would not. */
 async function removeE2eAccounts(dir: string): Promise<{ users: number; files: number }> {
   const users = await prisma.user.findMany({
     where: { email: { startsWith: E2E_EMAIL_PREFIX } },
-    select: { id: true, meetings: { select: { files: { select: { storedName: true } } } } },
+    select: {
+      id: true,
+      avatarUrl: true,
+      meetings: { select: { files: { select: { storedName: true } } } },
+    },
   });
   if (users.length === 0) return { users: 0, files: 0 };
 
@@ -56,13 +63,20 @@ async function removeE2eAccounts(dir: string): Promise<{ users: number; files: n
   const storedNames = users.flatMap((user) =>
     user.meetings.flatMap((meeting) => meeting.files.map((file) => file.storedName)),
   );
+  // Avatars live in their own subdirectory, so their paths are built differently. The
+  // orphan sweep never touches that subdirectory (it scans only top-level files), so
+  // this is the only thing that reclaims an e2e account's avatar bytes.
+  const avatarPaths = users
+    .map((user) => user.avatarUrl)
+    .filter((name): name is string => Boolean(name))
+    .map((name) => join(dir, AVATAR_SUBDIR, name));
 
   await prisma.user.deleteMany({ where: { id: { in: users.map((u) => u.id) } } });
 
   let removed = 0;
-  for (const name of storedNames) {
+  for (const path of [...storedNames.map((name) => join(dir, name)), ...avatarPaths]) {
     try {
-      await unlink(join(dir, name));
+      await unlink(path);
       removed += 1;
     } catch {
       // Already gone is the end state we wanted.
