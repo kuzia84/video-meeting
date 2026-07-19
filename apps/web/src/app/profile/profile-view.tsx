@@ -7,6 +7,7 @@ import { DefaultAvatar } from '@/components/default-avatar';
 import { PageShell } from '@/components/page-shell';
 import { ApiError, getProfile, type UserProfile } from '@/lib/api/profile';
 import { getAccessToken, removeAccessToken } from '@/lib/auth/token';
+import { ProfileNameForm } from './profile-name-form';
 
 type Status = 'loading' | 'ready' | 'error';
 
@@ -20,6 +21,13 @@ export function ProfileView() {
   // doesn't fire (and redirect) twice.
   const startedRef = useRef(false);
 
+  // A 401 anywhere (initial load or saving the name) means the session died: drop the
+  // dead token and send the user to log in again. Shared by load() and the name form.
+  const goToLogin = useCallback(() => {
+    removeAccessToken();
+    router.replace('/login');
+  }, [router]);
+
   const load = useCallback(async () => {
     setStatus('loading');
     setErrorMessage(null);
@@ -29,14 +37,13 @@ export function ProfileView() {
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         // Expired or invalid token: drop it and send the user to log in again.
-        removeAccessToken();
-        router.replace('/login');
+        goToLogin();
         return;
       }
       setErrorMessage(err instanceof Error ? err.message : 'Не удалось загрузить профиль.');
       setStatus('error');
     }
-  }, [router]);
+  }, [goToLogin]);
 
   useEffect(() => {
     if (startedRef.current) return;
@@ -107,11 +114,15 @@ export function ProfileView() {
         </Card.Header>
         <Card.Content className="flex flex-col gap-4 p-6 pt-0">
           {/* Email is read-only in every phase: it identifies the account and is never
-              editable here, unlike the name (which becomes editable later). */}
+              editable here, unlike the name. */}
           <TextField isReadOnly value={profile.email}>
             <Label>Email</Label>
             <Input className="h-11 md:h-10" />
           </TextField>
+
+          {/* Editing the name updates the same `profile` state the card header and the
+              avatar letter read from, so both change on save without a reload. */}
+          <ProfileNameForm profile={profile} onSaved={setProfile} onUnauthorized={goToLogin} />
         </Card.Content>
       </Card>
     </PageShell>

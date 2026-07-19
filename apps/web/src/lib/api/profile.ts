@@ -31,3 +31,17 @@ export async function getProfile(): Promise<UserProfile> {
   assertProfile(data);
   return data;
 }
+
+// PATCH /users/me — edit the current user's name. Same JWT header as getProfile;
+// returns the updated profile so the caller can refresh name + avatar letter
+// without a reload. The API validates the name (1..100, trimmed) and answers 400
+// with the reason, which surfaces as an ApiError.
+export async function updateProfileName(name: string): Promise<UserProfile> {
+  const data = await fetchJson<Partial<UserProfile>>('/users/me', {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify({ name }),
+  });
+  assertProfile(data);
+  return data;
+}
