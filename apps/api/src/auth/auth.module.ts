@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { CqrsModule } from '@nestjs/cqrs';
 import { JwtModule, JwtSignOptions } from '@nestjs/jwt';
 import { AuthController } from './auth.controller';
+import { ChangePasswordHandler } from './commands/handlers/change-password.handler';
 import { LoginHandler } from './commands/handlers/login.handler';
 import { RegisterHandler } from './commands/handlers/register.handler';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -29,7 +30,7 @@ import { TokenService } from './token.service';
     }),
   ],
   controllers: [AuthController],
-  providers: [RegisterHandler, LoginHandler, TokenService, JwtAuthGuard],
+  providers: [RegisterHandler, LoginHandler, ChangePasswordHandler, TokenService, JwtAuthGuard],
   exports: [JwtAuthGuard, JwtModule],
 })
 export class AuthModule {}

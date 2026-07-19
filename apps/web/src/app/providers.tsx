@@ -2,6 +2,7 @@
 
 import { ThemeProvider } from 'next-themes';
 import type { ReactNode } from 'react';
+import { CurrentUserProvider } from '@/lib/current-user/current-user-context';
 
 export function Providers({ children }: { children: ReactNode }) {
   return (
@@ -11,7 +12,9 @@ export function Providers({ children }: { children: ReactNode }) {
     // tokens ever apply. Set both: `class` for any Tailwind dark: variants,
     // `data-theme` for HeroUI.
     <ThemeProvider attribute={['class', 'data-theme']} defaultTheme="light">
-      {children}
+      {/* The single source of the signed-in user — spans header + page content so a
+          rename updates both at once. Stays mounted across client navigations. */}
+      <CurrentUserProvider>{children}</CurrentUserProvider>
     </ThemeProvider>
   );
 }

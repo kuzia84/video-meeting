@@ -3,10 +3,9 @@ import { User } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { CreateUserCommand } from '../../../users/commands/create-user.command';
 import { AuthResult } from '../../auth.types';
+import { BCRYPT_ROUNDS } from '../../bcrypt.constants';
 import { TokenService } from '../../token.service';
 import { RegisterCommand } from '../register.command';
-
-const BCRYPT_ROUNDS = 10;
 
 @CommandHandler(RegisterCommand)
 export class RegisterHandler implements ICommandHandler<RegisterCommand, AuthResult> {

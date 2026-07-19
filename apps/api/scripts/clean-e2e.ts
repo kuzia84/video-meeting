@@ -44,11 +44,18 @@ function uploadDir(): string {
   return isAbsolute(configured) ? configured : join(process.cwd(), configured);
 }
 
+/** Mirrors `AVATAR_SUBDIR` in src/users/avatar/avatar-storage.service.ts. */
+const AVATAR_SUBDIR = 'avatars';
+
 /** Deletes the e2e accounts, taking their bytes with them — the cascade would not. */
 async function removeE2eAccounts(dir: string): Promise<{ users: number; files: number }> {
   const users = await prisma.user.findMany({
     where: { email: { startsWith: E2E_EMAIL_PREFIX } },
-    select: { id: true, meetings: { select: { files: { select: { storedName: true } } } } },
+    select: {
+      id: true,
+      avatarUrl: true,
+      meetings: { select: { files: { select: { storedName: true } } } },
+    },
   });
   if (users.length === 0) return { users: 0, files: 0 };
 
@@ -56,13 +63,20 @@ async function removeE2eAccounts(dir: string): Promise<{ users: number; files: n
   const storedNames = users.flatMap((user) =>
     user.meetings.flatMap((meeting) => meeting.files.map((file) => file.storedName)),
   );
+  // Avatars live in their own subdirectory, so their paths are built differently. The
+  // orphan sweep never touches that subdirectory (it scans only top-level files), so
+  // this is the only thing that reclaims an e2e account's avatar bytes.
+  const avatarPaths = users
+    .map((user) => user.avatarUrl)
+    .filter((name): name is string => Boolean(name))
+    .map((name) => join(dir, AVATAR_SUBDIR, name));
 
   await prisma.user.deleteMany({ where: { id: { in: users.map((u) => u.id) } } });
 
   let removed = 0;
-  for (const name of storedNames) {
+  for (const path of [...storedNames.map((name) => join(dir, name)), ...avatarPaths]) {
     try {
-      await unlink(join(dir, name));
+      await unlink(path);
       removed += 1;
     } catch {
       // Already gone is the end state we wanted.
@@ -71,37 +85,54 @@ async function removeE2eAccounts(dir: string): Promise<{ users: number; files: n
   return { users: users.length, files: removed };
 }
 
-/** Sweeps files no row references — the residue of any row deleted outside the API. */
+/**
+ * Sweeps files no row references — the residue of any row deleted outside the API, plus
+ * an avatar orphaned by a concurrent replace (two uploads racing leave one file the link
+ * no longer points at). Meeting files sit top-level in `dir`; avatars sit in the
+ * `avatars/` subdirectory and are referenced by `user.avatarUrl`, so each space is swept
+ * against its own set of referenced names.
+ */
 async function removeOrphans(dir: string): Promise<{ files: number; bytes: number }> {
-  const rows = await prisma.meetingFile.findMany({ select: { storedName: true } });
-  const referenced = new Set(rows.map((row) => row.storedName));
-
-  let names: string[];
-  try {
-    names = await readdir(dir);
-  } catch {
-    return { files: 0, bytes: 0 };
-  }
+  const fileRows = await prisma.meetingFile.findMany({ select: { storedName: true } });
+  const avatarRows = await prisma.user.findMany({
+    where: { avatarUrl: { not: null } },
+    select: { avatarUrl: true },
+  });
 
   let files = 0;
   let bytes = 0;
   const now = Date.now();
-  for (const name of names) {
-    if (referenced.has(name)) continue;
-    const path = join(dir, name);
-    const stats = await stat(path).catch(() => null);
-    if (!stats?.isFile()) continue;
-    // Young and unreferenced most likely means "being uploaded right now".
-    if (now - stats.mtimeMs < ORPHAN_MIN_AGE_MS) continue;
 
+  async function sweep(directory: string, referenced: Set<string>): Promise<void> {
+    let names: string[];
     try {
-      await unlink(path);
-      files += 1;
-      bytes += stats.size;
+      names = await readdir(directory);
     } catch {
-      // Locked or already gone; the next run will pick it up.
+      return;
+    }
+    for (const name of names) {
+      if (referenced.has(name)) continue;
+      const path = join(directory, name);
+      const stats = await stat(path).catch(() => null);
+      if (!stats?.isFile()) continue;
+      // Young and unreferenced most likely means "being uploaded right now".
+      if (now - stats.mtimeMs < ORPHAN_MIN_AGE_MS) continue;
+      try {
+        await unlink(path);
+        files += 1;
+        bytes += stats.size;
+      } catch {
+        // Locked or already gone; the next run will pick it up.
+      }
     }
   }
+
+  await sweep(dir, new Set(fileRows.map((row) => row.storedName)));
+  await sweep(
+    join(dir, AVATAR_SUBDIR),
+    new Set(avatarRows.map((row) => row.avatarUrl).filter((name): name is string => Boolean(name))),
+  );
+
   return { files, bytes };
 }
 
