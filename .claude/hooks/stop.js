@@ -149,6 +149,22 @@ function transcriptBytes(transcriptPath) {
  * @param chain [{ milestone, issues:[{number,title}] }] — issues отсортированы по возрастанию
  * @returns {activeMilestone: string|null, nextIssue: object|null, totalOpen: number}
  */
+/**
+ * Нормализует цепочку milestone из конфига в список непустых строк.
+ * Терпима к тому, как задан список: `milestones` (главнее) или `milestone`,
+ * массив или одиночная строка. Любой элемент приводится к строке — чтобы
+ * массив под ключом `milestone` (естественная ошибка: переиспользовали
+ * привычный ключ) не ронял хук на `.trim()`, а просто работал как цепочка.
+ *
+ * @param config распарсенный ralph.config.json
+ * @returns string[] — milestone в заданном порядке, без пустых
+ */
+function chainFromConfig(config) {
+  const raw = config.milestones != null ? config.milestones : config.milestone;
+  const list = Array.isArray(raw) ? raw : [raw];
+  return list.map((m) => String(m ?? '').trim()).filter(Boolean);
+}
+
 function selectActive(chain) {
   let totalOpen = 0;
   let activeMilestone = null;
@@ -203,15 +219,7 @@ function main() {
   const maxIterations = Number(config.maxIterations) || 0;
   const maxSessionBytes = Number(config.maxSessionBytes) || 0;
 
-  // Цепочка milestone: массив `milestones` главнее; иначе — одиночный `milestone`
-  // (обратная совместимость). Пусто → цикл выключен.
-  const milestoneChain = (
-    Array.isArray(config.milestones) && config.milestones.length
-      ? config.milestones
-      : [config.milestone]
-  )
-    .map((m) => (m || '').trim())
-    .filter(Boolean);
+  const milestoneChain = chainFromConfig(config);
 
   if (!milestoneChain.length)
     return release('milestones/milestone в ralph.config.json пусты — цикл не запускается');
@@ -411,8 +419,14 @@ function main() {
 }
 
 // Запуск как хук — только когда файл вызван напрямую (`node stop.js`), а не require() из теста.
+// Любой непредвиденный сбой превращаем в грациозный выход с сообщением: краш хука (exit 1)
+// молча останавливает Claude и, у финального срабатывания, пропускает создание PR.
 if (require.main === module) {
-  main();
+  try {
+    main();
+  } catch (e) {
+    release(`внутренняя ошибка хука: ${e && e.message ? e.message : e}`);
+  }
 }
 
-module.exports = { decide, fill, selectActive };
+module.exports = { decide, fill, selectActive, chainFromConfig };
