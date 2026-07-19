@@ -8,6 +8,7 @@ import { UserAvatar } from '@/components/user-avatar';
 import { useCurrentUser } from '@/lib/current-user/current-user-context';
 import { removeAccessToken } from '@/lib/auth/token';
 import { AvatarUpload } from './avatar-upload';
+import { PasswordChangeForm } from './password-change-form';
 import { ProfileNameForm } from './profile-name-form';
 
 export function ProfileView() {
@@ -103,6 +104,13 @@ export function ProfileView() {
           {/* Saving pushes the updated user into the shared source, so the card header,
               the avatar letter here, and the header chip all change at once — no reload. */}
           <ProfileNameForm profile={user} onSaved={setUser} onUnauthorized={goToLogin} />
+        </Card.Content>
+      </Card>
+
+      {/* Password change is its own card — a distinct action from editing profile fields. */}
+      <Card className="w-full max-w-sm">
+        <Card.Content className="p-6">
+          <PasswordChangeForm onUnauthorized={goToLogin} />
         </Card.Content>
       </Card>
     </PageShell>

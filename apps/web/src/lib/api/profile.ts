@@ -1,5 +1,5 @@
 import type { UserProfile } from '@video-meetings/shared';
-import { fetchBlob, fetchJson } from './client';
+import { fetchBlob, fetchJson, fetchVoid } from './client';
 import { getAccessToken } from '@/lib/auth/token';
 
 export { ApiError } from './client';
@@ -73,4 +73,16 @@ export async function uploadAvatar(file: File): Promise<UserProfile> {
 // caller turn it into an object URL, the same shape as downloadMeetingFile.
 export async function fetchAvatarBlob(): Promise<Blob> {
   return fetchBlob('/users/me/avatar', { headers: authHeadersNoContentType() });
+}
+
+// POST /auth/change-password — change the signed-in user's password (204, no body). The
+// API verifies the current password and applies the registration rules to the new one,
+// answering 400 with the reason (a wrong current password carries `field: 'currentPassword'`
+// so the form can pin it), which surfaces as an ApiError.
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  await fetchVoid('/auth/change-password', {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
 }
