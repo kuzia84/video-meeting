@@ -6,33 +6,15 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { AppHeader } from '@/components/app-header';
 import { MeetingForm } from '@/components/meeting-form';
-import { uploadMeetingFile } from '@/lib/api/meeting-files';
-import { ApiError, createMeeting } from '@/lib/api/meetings';
-import { getAccessToken, removeAccessToken } from '@/lib/auth/token';
-
-/** What went wrong after the meeting itself was already created. */
-interface PartialFailure {
-  meetingId: string;
-  message: string;
-  /** How many files made it before the failure — the rest never started. */
-  uploaded: number;
-  total: number;
-}
+import { getAccessToken } from '@/lib/auth/token';
+import { useCreateMeeting } from './use-create-meeting';
 
 export function CreateMeetingView() {
   const router = useRouter();
   const [isReady, setReady] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
-  // { done, total, fraction } while uploading; null otherwise.
-  const [upload, setUpload] = useState<{ done: number; total: number; fraction: number } | null>(
-    null,
-  );
-  const [partialFailure, setPartialFailure] = useState<PartialFailure | null>(null);
+  const { upload, partialFailure, createMeetingWithFiles } = useCreateMeeting(files);
   const startedRef = useRef(false);
-  const uploadAbortRef = useRef<AbortController | null>(null);
-
-  // Leaving mid-upload must not keep pushing the file at a page that is gone.
-  useEffect(() => () => uploadAbortRef.current?.abort(), []);
 
   useEffect(() => {
     if (startedRef.current) return;
@@ -86,60 +68,7 @@ export function CreateMeetingView() {
           submitLabel="Создать встречу"
           pendingLabel="Создание…"
           onCancel={() => router.push('/')}
-          onSubmit={async (values) => {
-            setPartialFailure(null);
-            let created;
-            try {
-              created = await createMeeting(values);
-            } catch (err) {
-              if (err instanceof ApiError && err.status === 401) {
-                removeAccessToken();
-                router.replace('/login');
-                return;
-              }
-              // Rethrown so the form reports it above the fields. Nothing was created.
-              throw err;
-            }
-
-            // Files can only be uploaded against an existing meeting, so this is the one
-            // order available: create, then upload. Everything past this point has to
-            // keep the created meeting reachable, because it is already real.
-            //
-            // Serially, not in parallel: it is what makes the progress bar's
-            // (done + fraction) / total mean anything, and what lets the first failure
-            // stop the rest. The cost is wall-clock on multi-file picks.
-            uploadAbortRef.current = new AbortController();
-            for (const [index, file] of files.entries()) {
-              try {
-                setUpload({ done: index, total: files.length, fraction: 0 });
-                await uploadMeetingFile(created.id, file, {
-                  onProgress: (fraction) =>
-                    setUpload({ done: index, total: files.length, fraction }),
-                  // Without this, leaving mid-upload keeps pushing the whole file at a
-                  // page that is gone — the meeting-page uploader already aborts.
-                  signal: uploadAbortRef.current.signal,
-                });
-              } catch (err) {
-                setUpload(null);
-                // Not thrown to the form: the form's error sits by the fields and would
-                // read as "the meeting was not created", which is the opposite of true.
-                setPartialFailure({
-                  meetingId: created.id,
-                  // Names the file and how far the queue got: "не удалось загрузить файл"
-                  // leaves a three-file pick guessing which one and what survived.
-                  message: `«${file.name}» (${index + 1} из ${files.length}) — ${
-                    err instanceof Error ? err.message : 'попробуйте ещё раз.'
-                  }`,
-                  uploaded: index,
-                  total: files.length,
-                });
-                return;
-              }
-            }
-
-            setUpload(null);
-            router.push(`/meetings/${created.id}`);
-          }}
+          onSubmit={createMeetingWithFiles}
         >
           <div className="flex flex-col gap-2">
             <label className="text-sm font-medium" htmlFor="meeting-files">
