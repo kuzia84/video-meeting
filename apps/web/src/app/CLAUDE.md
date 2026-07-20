@@ -17,6 +17,7 @@ Greeting (`Здравствуйте, ${email}` — email decoded from the JWT vi
 - Page links are windowed by `paginationRange` (`pagination-range.ts`, capped at 7 slots) rather than one link per page.
 - `loadPage` stamps each request (`requestIdRef`) and ignores responses from superseded ones, so fast paging can't land on a page the user didn't ask for last.
 - A failure while paging keeps the list + pagination on screen and reports beside them; only the very first load has nothing to fall back on.
+- `HomeView` keeps only state + composition; the presentation is colocated: `MeetingCard` (`meeting-card.tsx`), `MeetingsPagination` (`meetings-pagination.tsx`), `MeetingsEmptyState` (`meetings-empty-state.tsx`), and `CreateMeetingLink`/`CREATE_MEETING_HREF` (`create-meeting-link.tsx`, shared by the CTA and the empty state).
 
 ## `/profile` (`profile-view.tsx`)
 
@@ -28,7 +29,7 @@ Wears `PageShell`/`AppHeader`, reads the current user from `useCurrentUser` (not
 
 ## `/meetings/new` (`create-meeting-view.tsx`)
 
-Renders the shared `MeetingForm` (which owns all field validation — see `../components/CLAUDE.md`) with a file picker in its `children` slot, then `router.push` to the created meeting. **Order is forced**: the meeting is created first (files need its id), so a failed upload does **not** go to the form's error slot (which would read as "the meeting was not created", the opposite of true) but to its own notice with an "Открыть встречу" link. Files are uploaded serially after create. `datetime-local` (zone-less) → ISO for the API is handled inside `MeetingForm`.
+Renders the shared `MeetingForm` (which owns all field validation — see `../components/CLAUDE.md`) with a file picker in its `children` slot, then `router.push` to the created meeting. **Order is forced**: the meeting is created first (files need its id), so a failed upload does **not** go to the form's error slot (which would read as "the meeting was not created", the opposite of true) but to its own notice with an "Открыть встречу" link. Files are uploaded serially after create. `datetime-local` (zone-less) → ISO for the API is handled inside `MeetingForm`. The create+upload orchestration (the serial loop, `upload`/`partialFailure` state, abort-on-unmount, 401 redirect) lives in the **`useCreateMeeting(files)`** hook (`use-create-meeting.ts`), exposing `createMeetingWithFiles`; the view is presentational.
 
 ## `/meetings/[id]` (`meeting-view.tsx`)
 
@@ -36,4 +37,6 @@ Server `page.tsx` awaits `params` (Next 15 hands them over as a Promise) and pas
 
 - **Edit** — a "Редактировать" button switches to an inline edit mode that renders the same shared `MeetingForm` (`initial={meeting}`, `submitLabel="Сохранить"`); `onSubmit` calls `updateMeeting(id, values)`, sets the returned row, exits edit, shows a "Изменения сохранены" notice, and restores focus to the edit button.
 - **Delete** — a `ConfirmDeleteDialog` (trigger "Удалить встречу", confirm "Да, удалить") calls `deleteMeeting(id)` then `router.push('/')`.
-- **Files** — the `meeting-files.tsx` block below the details (lives here, not in `src/components/`): rendered once the meeting resolved, it owns its own loading/error state **separately** from the meeting and does **not** redirect on `401`/`404` (the meeting view owns the page-level outcome). Uses `format-file-size.ts` for display; download/upload go through `src/lib/api/meeting-files.ts` (see `../lib/CLAUDE.md`).
+- **Files** — the `meeting-files.tsx` block below the details (lives here, not in `src/components/`): rendered once the meeting resolved, it owns its own loading/error state **separately** from the meeting and does **not** redirect on `401`/`404` (the meeting view owns the page-level outcome). Uses `format-file-size.ts` for display; download/upload go through `src/lib/api/meeting-files.ts` (see `../lib/CLAUDE.md`). The list + its actions (load/upload/download/delete, the download `Set`, abort-on-unmount, append-vs-reload) live in the **`useMeetingFiles(meetingId)`** hook (`use-meeting-files.ts`); a single file's row is `FileRow` (`file-row.tsx`); `meeting-files.tsx` is just composition.
+
+The view/edit split: `MeetingView` is the state machine (`loading/missing/error/ready`) + edit toggle and owns `handleUpdate`; the read-only view (title, edit/delete actions, dates, description) is `MeetingDetails` (`meeting-details.tsx`).

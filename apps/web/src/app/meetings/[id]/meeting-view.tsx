@@ -13,21 +13,13 @@ import {
   type Meeting,
 } from '@/lib/api/meetings';
 import { getAccessToken, removeAccessToken } from '@/lib/auth/token';
-import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
-import { MeetingForm } from '@/components/meeting-form';
+import { MeetingForm, type MeetingFormValues } from '@/components/meeting-form';
+import { MeetingDetails } from './meeting-details';
 import { MeetingFiles } from './meeting-files';
 
 // 'missing' is its own state, not an error: a meeting that is not there is a normal
 // answer to a guessed or stale link, and reads very differently from a failed request.
 type Status = 'loading' | 'ready' | 'missing' | 'error';
-
-const dateTimeFormatter = new Intl.DateTimeFormat('ru-RU', {
-  day: 'numeric',
-  month: 'long',
-  year: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-});
 
 export function MeetingView({ meetingId }: { meetingId: string }) {
   const router = useRouter();
@@ -78,6 +70,27 @@ export function MeetingView({ meetingId }: { meetingId: string }) {
     }
     void load();
   }, [router, load]);
+
+  /** Saves the edited fields; a 401 bounces to login, anything else is left to the form. */
+  async function handleUpdate(values: MeetingFormValues): Promise<void> {
+    if (!meeting) return;
+    try {
+      // The response is the updated row, so the page can show it without a second request.
+      setMeeting(await updateMeeting(meeting.id, values));
+      setEditing(false);
+      // Otherwise a save and a cancel look identical: the form just disappears.
+      setSavedNotice(true);
+      requestAnimationFrame(() => editButtonRef.current?.focus());
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        removeAccessToken();
+        router.replace('/login');
+        return;
+      }
+      // Rethrown so the form reports it above the fields.
+      throw err;
+    }
+  }
 
   if (status === 'loading') {
     return (
@@ -146,96 +159,25 @@ export function MeetingView({ meetingId }: { meetingId: string }) {
               // Focus returns where it came from rather than falling to <body>.
               requestAnimationFrame(() => editButtonRef.current?.focus());
             }}
-            onSubmit={async (values) => {
-              try {
-                // The response is the updated row, so the page can show it without a
-                // second request.
-                setMeeting(await updateMeeting(meeting.id, values));
-                setEditing(false);
-                // Otherwise a save and a cancel look identical: the form just disappears.
-                setSavedNotice(true);
-                requestAnimationFrame(() => editButtonRef.current?.focus());
-              } catch (err) {
-                if (err instanceof ApiError && err.status === 401) {
-                  removeAccessToken();
-                  router.replace('/login');
-                  return;
-                }
-                // Rethrown so the form reports it above the fields.
-                throw err;
-              }
-            }}
+            onSubmit={handleUpdate}
           />
         </section>
       ) : (
-        <article className="flex flex-col gap-6">
-          <header className="flex flex-col gap-2">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <h1 className="text-2xl font-semibold tracking-tight">{meeting.title}</h1>
-              <div className="flex shrink-0 items-center gap-2">
-                <Button
-                  ref={editButtonRef}
-                  variant="outline"
-                  size="sm"
-                  onPress={() => {
-                    setSavedNotice(false);
-                    setEditing(true);
-                  }}
-                >
-                  Редактировать
-                </Button>
-                <ConfirmDeleteDialog
-                  trigger={
-                    <Button variant="ghost" size="sm">
-                      Удалить встречу
-                    </Button>
-                  }
-                  heading="Удалить встречу?"
-                  body={
-                    <p>
-                      Встреча <strong>{meeting.title}</strong> и все её файлы будут удалены
-                      безвозвратно.
-                    </p>
-                  }
-                  // Not "Удалить встречу": that is the trigger's own name, and two
-                  // buttons answering to one name are two outcomes for one utterance.
-                  confirmLabel="Да, удалить"
-                  pendingLabel="Удаление…"
-                  onConfirm={async () => {
-                    await deleteMeeting(meeting.id);
-                    // Nothing left to show here, so leave the page rather than render a
-                    // meeting that no longer exists.
-                    router.push('/');
-                  }}
-                />
-              </div>
-            </div>
-            <p className="text-muted text-sm">
-              <time dateTime={meeting.startTime}>
-                {dateTimeFormatter.format(new Date(meeting.startTime))}
-              </time>
-              {' — '}
-              <time dateTime={meeting.endTime}>
-                {dateTimeFormatter.format(new Date(meeting.endTime))}
-              </time>
-            </p>
-          </header>
-
-          {savedNotice ? (
-            <p className="text-success text-sm" role="status">
-              Изменения сохранены
-            </p>
-          ) : null}
-
-          <section className="flex flex-col gap-2">
-            <h2 className="text-sm font-medium">Описание</h2>
-            {meeting.description ? (
-              <p className="whitespace-pre-wrap">{meeting.description}</p>
-            ) : (
-              <p className="text-muted text-sm">Описание не указано</p>
-            )}
-          </section>
-        </article>
+        <MeetingDetails
+          meeting={meeting}
+          editButtonRef={editButtonRef}
+          savedNotice={savedNotice}
+          onEdit={() => {
+            setSavedNotice(false);
+            setEditing(true);
+          }}
+          onDelete={async () => {
+            await deleteMeeting(meeting.id);
+            // Nothing left to show here, so leave the page rather than render a meeting
+            // that no longer exists.
+            router.push('/');
+          }}
+        />
       )}
 
       {/* Rendered only once the meeting itself resolved: on a 404 there is no meeting to

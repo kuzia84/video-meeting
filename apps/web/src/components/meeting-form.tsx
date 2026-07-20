@@ -2,6 +2,7 @@
 
 import { Alert, Button, FieldError, Form, Input, Label, TextArea, TextField } from '@heroui/react';
 import { useRef, useState } from 'react';
+import { toLocalInput, validateMeetingFields } from './meeting-form-validation';
 
 /** What the API needs; the form does the converting. */
 export interface MeetingFormValues {
@@ -17,19 +18,6 @@ export interface MeetingFormInitial {
   description: string | null;
   startTime: string;
   endTime: string;
-}
-
-/** `datetime-local` speaks zone-less local time; the API speaks ISO. */
-function toIso(localValue: string): string | null {
-  const date = new Date(localValue);
-  return Number.isNaN(date.getTime()) ? null : date.toISOString();
-}
-
-/** The inverse: an ISO instant as the local wall-clock string the input expects. */
-function toLocalInput(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '';
-  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 }
 
 /**
@@ -92,24 +80,11 @@ export function MeetingForm({
     setFormError(null);
     setFieldErrors({});
 
-    const data = new FormData(event.currentTarget);
-    const title = String(data.get('title') ?? '').trim();
-    const description = String(data.get('description') ?? '').trim();
-    const startIso = toIso(String(data.get('startTime') ?? ''));
-    const endIso = toIso(String(data.get('endTime') ?? ''));
-
     // validationBehavior="aria" does NOT block submission, so this runs with empty and
-    // invalid fields — these checks are load-bearing, not belt-and-braces.
-    const errors: Record<string, string> = {};
-    if (!title) errors.title = 'Введите название встречи';
-    if (!startIso) errors.startTime = 'Укажите время начала';
-    if (!endIso) errors.endTime = 'Укажите время окончания';
-    if (startIso && endIso && new Date(endIso) <= new Date(startIso)) {
-      errors.endTime = 'Окончание должно быть позже начала';
-    }
-
-    // The null checks are redundant with `errors`; they are here so TypeScript narrows.
-    if (Object.keys(errors).length > 0 || !startIso || !endIso) {
+    // invalid fields — the checks in validateMeetingFields are load-bearing, not
+    // belt-and-braces.
+    const { values, errors } = validateMeetingFields(new FormData(event.currentTarget));
+    if (!values) {
       setFieldErrors(errors);
       isSubmittingRef.current = false;
       return;
@@ -117,13 +92,7 @@ export function MeetingForm({
 
     setSubmitting(true);
     try {
-      await onSubmit({
-        title,
-        // The column is nullable; an empty box means "no description", not "".
-        description: description || null,
-        startTime: startIso,
-        endTime: endIso,
-      });
+      await onSubmit(values);
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Не удалось сохранить встречу.');
     } finally {

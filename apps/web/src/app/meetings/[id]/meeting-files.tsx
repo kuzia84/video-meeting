@@ -1,164 +1,23 @@
 'use client';
 
 import { Button, buttonVariants, ProgressBar } from '@heroui/react';
-import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
-import {
-  ApiError,
-  deleteMeetingFile,
-  downloadMeetingFile,
-  listMeetingFiles,
-  uploadMeetingFile,
-  type MeetingFile,
-} from '@/lib/api/meeting-files';
-import { removeAccessToken } from '@/lib/auth/token';
-import { formatFileSize } from './format-file-size';
-
-type Status = 'loading' | 'ready' | 'error';
-
-const dateFormatter = new Intl.DateTimeFormat('ru-RU', {
-  day: 'numeric',
-  month: 'long',
-  year: 'numeric',
-});
-
-function FileIcon(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      {...props}
-    >
-      <path d="M14 3v5h5" />
-      <path d="M19 8v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7z" />
-    </svg>
-  );
-}
+import { FileIcon } from '@/components/icons';
+import { FileRow } from './file-row';
+import { useMeetingFiles } from './use-meeting-files';
 
 export function MeetingFiles({ meetingId }: { meetingId: string }) {
-  const router = useRouter();
-  const [status, setStatus] = useState<Status>('loading');
-  const [files, setFiles] = useState<MeetingFile[]>([]);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  // A Set, not one id: two downloads can be in flight, and a single value would let the
-  // first to finish re-enable the other's button while it is still fetching.
-  const [downloadingIds, setDownloadingIds] = useState<ReadonlySet<string>>(new Set());
-
-  // null when nothing is uploading; 0..1 while it is. A separate flag would let the two
-  // disagree about whether an upload is in progress.
-  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const uploadAbortRef = useRef<AbortController | null>(null);
-
-  // Strict Mode runs effects twice in dev; the fetch is idempotent, but the guard keeps
-  // the request count honest.
-  const startedRef = useRef(false);
-
-  const load = useCallback(async () => {
-    setStatus('loading');
-    setErrorMessage(null);
-    try {
-      setFiles(await listMeetingFiles(meetingId));
-      setStatus('ready');
-    } catch (err) {
-      // A 401/404 is left to the meeting view around this block: it owns the page-level
-      // outcome (redirect, "not found"), and two components racing to redirect on the
-      // same response would fight.
-      setErrorMessage(err instanceof Error ? err.message : 'Не удалось загрузить файлы.');
-      setStatus('error');
-    }
-  }, [meetingId]);
-
-  useEffect(() => {
-    if (startedRef.current) return;
-    startedRef.current = true;
-    void load();
-  }, [load]);
-
-  // Stops an upload in flight when the user leaves: otherwise the browser keeps pushing
-  // the whole file for a component that no longer exists, and the file lands anyway.
-  useEffect(() => {
-    return () => uploadAbortRef.current?.abort();
-  }, []);
-
-  function setDownloading(fileId: string, active: boolean) {
-    setDownloadingIds((current) => {
-      const next = new Set(current);
-      if (active) next.add(fileId);
-      else next.delete(fileId);
-      return next;
-    });
-  }
-
-  async function handleDownload(file: MeetingFile) {
-    setDownloading(file.id, true);
-    setErrorMessage(null);
-    try {
-      await downloadMeetingFile(file);
-    } catch (err) {
-      // Names the file: with several rows, "не удалось скачать файл" alone leaves the
-      // user guessing which one.
-      const reason = err instanceof Error ? err.message : 'Попробуйте ещё раз.';
-      setErrorMessage(`Не удалось скачать «${file.originalName}». ${reason}`);
-    } finally {
-      setDownloading(file.id, false);
-    }
-  }
-
-  async function handleDelete(file: MeetingFile) {
-    try {
-      await deleteMeetingFile(meetingId, file.id);
-    } catch (err) {
-      // An expired token is "log in again", not "could not delete" — which is what the
-      // dialog would otherwise show to someone who would keep retrying. Every other call
-      // in the app handles it this way.
-      if (err instanceof ApiError && err.status === 401) {
-        removeAccessToken();
-        router.replace('/login');
-        return;
-      }
-      throw err;
-    }
-    // Dropped from what is on screen rather than re-fetching: the server has confirmed
-    // it is gone, and the rest of the list was already right.
-    setFiles((current) => current.filter((f) => f.id !== file.id));
-  }
-
-  async function handleUpload(file: File) {
-    setErrorMessage(null);
-    setUploadProgress(0);
-    uploadAbortRef.current = new AbortController();
-    try {
-      const created = await uploadMeetingFile(meetingId, file, {
-        onProgress: setUploadProgress,
-        signal: uploadAbortRef.current?.signal,
-      });
-
-      if (status === 'ready') {
-        // Appended, not re-fetched: the API returned the created row, and the list is
-        // ordered oldest-first, so the newest file belongs at the end.
-        setFiles((current) => [...current, created]);
-      } else {
-        // The list never loaded, so this one row is not the whole story — showing it
-        // alone would pass a one-file list off as complete. Ask the server instead.
-        await load();
-      }
-    } catch (err) {
-      // The reason (the 100 MB limit, the allowed types) comes from the API and is shown
-      // verbatim — the PRD asks for the cause, not a generic failure.
-      setErrorMessage(err instanceof Error ? err.message : 'Не удалось загрузить файл.');
-    } finally {
-      setUploadProgress(null);
-      // Cleared so picking the same file again still fires a change event.
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  }
+  const {
+    status,
+    files,
+    errorMessage,
+    downloadingIds,
+    uploadProgress,
+    fileInputRef,
+    load,
+    handleDownload,
+    handleDelete,
+    handleUpload,
+  } = useMeetingFiles(meetingId);
 
   const isUploading = uploadProgress !== null;
 
@@ -239,62 +98,19 @@ export function MeetingFiles({ meetingId }: { meetingId: string }) {
       ) : null}
 
       {files.length > 0 ? (
-        <>
-          {/* Named because the page has more than one list; also tells the two apart
-              for assistive tech. */}
-          <ul aria-label="Список файлов" className="flex flex-col gap-2">
-            {files.map((file) => (
-              <li
-                key={file.id}
-                className="border-border flex items-center justify-between gap-4 rounded-xl border p-3"
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <FileIcon className="text-muted size-5 shrink-0" />
-                  <div className="flex min-w-0 flex-col">
-                    {/* A long name must not push the download button off the row. */}
-                    <span className="truncate font-medium" title={file.originalName}>
-                      {file.originalName}
-                    </span>
-                    <span className="text-muted text-sm">
-                      {formatFileSize(file.size)} ·{' '}
-                      <time dateTime={file.createdAt}>
-                        {dateFormatter.format(new Date(file.createdAt))}
-                      </time>
-                    </span>
-                  </div>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    isDisabled={downloadingIds.has(file.id)}
-                    onPress={() => void handleDownload(file)}
-                    // Every row's button reads "Скачать"; the name says which file.
-                    aria-label={`Скачать ${file.originalName}`}
-                  >
-                    {downloadingIds.has(file.id) ? 'Скачивание…' : 'Скачать'}
-                  </Button>
-                  <ConfirmDeleteDialog
-                    trigger={
-                      <Button variant="ghost" size="sm" aria-label={`Удалить ${file.originalName}`}>
-                        Удалить
-                      </Button>
-                    }
-                    heading="Удалить файл?"
-                    body={
-                      <p>
-                        Файл <strong>{file.originalName}</strong> будет удалён безвозвратно.
-                      </p>
-                    }
-                    confirmLabel="Удалить файл"
-                    pendingLabel="Удаление…"
-                    onConfirm={() => handleDelete(file)}
-                  />
-                </div>
-              </li>
-            ))}
-          </ul>
-        </>
+        // Named because the page has more than one list; also tells the two apart for
+        // assistive tech.
+        <ul aria-label="Список файлов" className="flex flex-col gap-2">
+          {files.map((file) => (
+            <FileRow
+              key={file.id}
+              file={file}
+              isDownloading={downloadingIds.has(file.id)}
+              onDownload={() => void handleDownload(file)}
+              onDelete={() => handleDelete(file)}
+            />
+          ))}
+        </ul>
       ) : null}
     </section>
   );

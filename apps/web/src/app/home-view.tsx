@@ -1,25 +1,16 @@
 'use client';
 
-import { buttonVariants, Card, Pagination } from '@heroui/react';
-import NextLink from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppHeader } from '@/components/app-header';
 import { ApiError, listMeetings, MEETINGS_PAGE_SIZE, type Meeting } from '@/lib/api/meetings';
 import { getAccessToken, getUserEmailFromToken, removeAccessToken } from '@/lib/auth/token';
-import { ELLIPSIS, paginationRange } from './pagination-range';
+import { CreateMeetingLink } from './create-meeting-link';
+import { MeetingCard } from './meeting-card';
+import { MeetingsEmptyState } from './meetings-empty-state';
+import { MeetingsPagination } from './meetings-pagination';
 
 type Status = 'loading' | 'ready' | 'error';
-
-/** Where the "create a meeting" actions lead. */
-const CREATE_MEETING_HREF = '/meetings/new';
-
-const dateFormatter = new Intl.DateTimeFormat('ru-RU', {
-  day: 'numeric',
-  month: 'long',
-  hour: '2-digit',
-  minute: '2-digit',
-});
 
 // Russian noun agreement for "встреча" (1 встреча, 2 встречи, 5 встреч).
 function meetingsWord(n: number): string {
@@ -28,41 +19,6 @@ function meetingsWord(n: number): string {
   if (mod10 === 1 && mod100 !== 11) return 'встреча';
   if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'встречи';
   return 'встреч';
-}
-
-function CalendarIcon(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      {...props}
-    >
-      <rect x="3" y="4.5" width="18" height="16" rx="2.5" />
-      <path d="M3 9h18M8 3v3M16 3v3" />
-    </svg>
-  );
-}
-
-/**
- * Navigation that looks like a button, so it is a real <a>: middle-click and
- * "open in new tab" work, and Next prefetches it like any other route link.
- *
- * Styled via `buttonVariants` rather than <Button render={…}> — HeroUI's documented
- * way to dress a framework link, and the render route warns at runtime
- * ("Expected <button>, got <a>. This may break the component behavior and
- * accessibility") because Button builds on React Aria's button behaviour.
- */
-function CreateMeetingLink({ children, size }: { children: string; size?: 'lg' }) {
-  return (
-    <NextLink className={buttonVariants({ size })} href={CREATE_MEETING_HREF}>
-      {children}
-    </NextLink>
-  );
 }
 
 export function HomeView() {
@@ -173,16 +129,7 @@ export function HomeView() {
           {status === 'error' ? (
             <p className="text-danger text-sm">{errorMessage}</p>
           ) : showsEmptyState ? (
-            <div className="border-border flex flex-col items-center gap-3 rounded-xl border border-dashed px-4 py-12 text-center">
-              <CalendarIcon className="text-muted size-12" />
-              <p className="font-medium">Встреч пока нет</p>
-              <p className="text-muted max-w-xs text-sm text-balance">
-                Создайте первую встречу — сюда можно будет загрузить её запись.
-              </p>
-              {/* Wording differs from the CTA above on purpose: two buttons reading
-                  "Создать встречу" would be ambiguous to screen readers and to tests. */}
-              <CreateMeetingLink>Создать первую встречу</CreateMeetingLink>
-            </div>
+            <MeetingsEmptyState />
           ) : (
             <>
               {/* Named because the pagination below is a list of <li> too — without this
@@ -194,27 +141,7 @@ export function HomeView() {
               >
                 {meetings.map((meeting) => (
                   <li key={meeting.id}>
-                    {/* The whole card is the link, so the target is as big as it looks
-                        rather than just the title. */}
-                    <NextLink
-                      href={`/meetings/${meeting.id}`}
-                      className="focus-visible:outline-accent block rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2"
-                    >
-                      <Card className="hover:border-accent transition-colors">
-                        <Card.Header>
-                          <Card.Title>{meeting.title}</Card.Title>
-                          <Card.Description>
-                            {dateFormatter.format(new Date(meeting.startTime))} —{' '}
-                            {dateFormatter.format(new Date(meeting.endTime))}
-                          </Card.Description>
-                        </Card.Header>
-                        {meeting.description ? (
-                          <Card.Content>
-                            <p className="text-muted text-sm">{meeting.description}</p>
-                          </Card.Content>
-                        ) : null}
-                      </Card>
-                    </NextLink>
+                    <MeetingCard meeting={meeting} />
                   </li>
                 ))}
               </ul>
@@ -228,47 +155,12 @@ export function HomeView() {
               ) : null}
 
               {pageCount > 1 ? (
-                <Pagination className="justify-center" aria-label="Навигация по страницам встреч">
-                  <Pagination.Content>
-                    <Pagination.Item>
-                      <Pagination.Previous
-                        isDisabled={page === 1 || isPaging}
-                        onPress={() => void loadPage(page - 1)}
-                      >
-                        <Pagination.PreviousIcon />
-                        <span>Назад</span>
-                      </Pagination.Previous>
-                    </Pagination.Item>
-                    {paginationRange(page, pageCount).map((slot, index) =>
-                      slot === ELLIPSIS ? (
-                        // Index as key is safe here: the ellipses have no identity of
-                        // their own and never reorder relative to the numbers.
-                        <Pagination.Item key={`gap-${index}`}>
-                          <Pagination.Ellipsis />
-                        </Pagination.Item>
-                      ) : (
-                        <Pagination.Item key={slot}>
-                          <Pagination.Link
-                            isActive={slot === page}
-                            isDisabled={isPaging}
-                            onPress={() => void loadPage(slot)}
-                          >
-                            {slot}
-                          </Pagination.Link>
-                        </Pagination.Item>
-                      ),
-                    )}
-                    <Pagination.Item>
-                      <Pagination.Next
-                        isDisabled={page === pageCount || isPaging}
-                        onPress={() => void loadPage(page + 1)}
-                      >
-                        <span>Вперёд</span>
-                        <Pagination.NextIcon />
-                      </Pagination.Next>
-                    </Pagination.Item>
-                  </Pagination.Content>
-                </Pagination>
+                <MeetingsPagination
+                  page={page}
+                  pageCount={pageCount}
+                  isPaging={isPaging}
+                  onPage={(next) => void loadPage(next)}
+                />
               ) : null}
             </>
           )}
