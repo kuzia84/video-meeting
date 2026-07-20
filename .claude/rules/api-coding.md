@@ -18,3 +18,7 @@ These rules take priority over patterns in existing code. If existing code viola
 - **The return type is stated explicitly** as `Promise<T>` for async methods (or the concrete type for sync ones).
 - **No `console.log`** — use `Logger` from `@nestjs/common` (a per-class `private readonly logger = new Logger(ClassName.name)`).
 - **Name variables by meaning**, not `x` / `data` / `result` / `tmp`.
+
+## Dependencies (NestJS DI)
+
+- **Reach another module's providers through that module** — import the module that exports the provider (or dispatch over the CQRS bus), not by importing another feature's service class directly. (E.g. Auth reaches Users via `CommandBus`/`QueryBus` and the exported `JwtAuthGuard`, never by importing a Users service.)
