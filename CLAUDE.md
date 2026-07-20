@@ -4,78 +4,69 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Turborepo monorepo with npm workspaces containing two applications and one shared package:
+Turborepo monorepo with npm workspaces containing two apps and one shared package:
 
-- `apps/web` — Next.js 15 (App Router, React 19) frontend
-- `apps/api` — NestJS 11 backend, listens on port 3001 (Next.js dev server uses the default 3000)
-- `packages/shared` — `@video-meetings/shared`, shared TypeScript types consumed by both apps
+- `apps/web` — Next.js 15 (App Router, React 19) frontend, port 3000
+- `apps/api` — NestJS 11 backend, port 3001
+- `packages/shared` — `@video-meetings/shared`, types + runtime logic used by both apps
 
 See `apps/api/CLAUDE.md` and `apps/web/CLAUDE.md` for per-app details.
 
 ## Commands
 
-All commands run from the repo root via Turborepo, which fans out to every workspace in parallel and caches results:
+Scripts are defined in the root `package.json` (run via Turborepo — fans out to every workspace, caches; `build` compiles `shared` before dependent apps via `^build`). Scope to one workspace with `-w <workspace>` or `turbo run <task> --filter=<workspace>`. `npm run db:up`/`db:down`/`db:logs` drive the local Postgres (:5432). What the script names don't tell you:
 
-```bash
-npm run dev          # turbo run dev — starts web (3000) and api (3001) concurrently
-npm run build         # turbo run build — builds shared, then api and web in parallel (^build dependency)
-npm run lint          # turbo run lint
-npm run lint:fix      # turbo run lint:fix
-npm run test          # turbo run test — unit tests; apps/api (jest) and packages/shared (jest/ts-jest) have them
-npm run clean         # turbo run clean
-npm run format        # prettier --write across the whole repo
-npm run format:check
-npm run db:up          # docker compose up -d — starts local Postgres on :5432
-npm run db:down        # docker compose down
-npm run db:logs        # docker compose logs -f postgres
-```
-
-To scope a command to a single workspace, use npm's `-w` flag or `turbo run <task> --filter=<workspace>`, e.g.:
-
-```bash
-npm run test -w @video-meetings/api
-npm run dev -w @video-meetings/web
-```
-
-**E2E suites are not part of `npm run test`** — both need a running Postgres, so they stay out of the cached turbo task and are run on purpose:
-
-```bash
-npm run test:e2e -w @video-meetings/api   # API e2e (supertest) — uses its own database, see below
-npm run test:e2e -w @video-meetings/web   # browser e2e (Playwright; needs `npx playwright install chromium` once)
-```
-
-The **API e2e run creates and uses its own database** (`video_meetings_e2e`, same Postgres server), because its suites clear `user` and `meeting` wholesale between tests. Nothing it does touches the dev database or the `npm run db:seed` account. The **browser e2e** are the opposite: they drive the running dev server, so they read and write the **dev** database — they only ever add rows, never delete, but their seeded users do accumulate there.
-
-Running a single test file (from `apps/api`, or via `-w @video-meetings/api`):
-
-```bash
-npx jest app.controller.spec.ts
-npx jest --config ./test/jest-e2e.json   # e2e tests
-```
+- **`npm run test`** is unit only (api jest, shared jest/ts-jest) — no Postgres, cached/fast. **E2E is deliberately separate** (not in the turbo `test` task) because both suites need a running Postgres (`npm run db:up`):
+  - `npm run test:e2e -w @video-meetings/api` — supertest, uses its **own** database (`video_meetings_e2e`), so it never touches the dev database or seed account.
+  - `npm run test:e2e -w @video-meetings/web` — Playwright (needs `npx playwright install chromium` once), drives the **dev** server/database (add-only, but its seeded users accumulate — reclaimed by `npm run db:clean-e2e`).
+- Run a single test (from `apps/api`): `npx jest app.controller.spec.ts` (add `--config ./test/jest-e2e.json` for e2e).
 
 ## Architecture
 
-- **Package manager / workspaces**: npm workspaces (`apps/*`, `packages/*`) — a single `node_modules` at the root, with `@video-meetings/shared` symlinked into each app.
-- **Task orchestration**: `turbo.json` defines the task graph. `build`, `lint`, `test`, **and `dev`** all `dependsOn: ["^build"]`, meaning `packages/shared` is compiled before dependent apps run those tasks (the `^build` on `dev` is what guarantees `apps/api` finds shared's compiled output when `npm run dev` starts it). `dev` is uncached and persistent.
-- **Shared package (types + runtime logic)**: `packages/shared` **is compiled** — its `build` script is `tsc` (emits `dist/` JS + `.d.ts`), and its `package.json` `main`/`types` point at `./dist/…`. This changed once the package started carrying **runtime** code the **API** imports (not just types): `apps/api` runs as plain Node (`nest start` / `node dist/main`), which cannot `require` raw `.ts`, so shared must ship real JS. (This supersedes the original "shared has no compiled output, source-consumed" design in `docs/superpowers/`.) Resolution differs per consumer, on purpose: **`apps/web`** still resolves shared to **TypeScript source** via its `tsconfig.json` path alias (`"@video-meetings/shared": ["../../packages/shared/src"]`) plus `transpilePackages`, so web picks up edits with no rebuild; **`apps/api`** resolves the **compiled `dist/`** at runtime (via `package.json` `main`), which is why shared must be built before the API runs — handled by turbo's `^build` for `build`/`test`/`lint`/`dev`, and by `predev`/`prebuild`/`prestart` scripts in `apps/api` for direct `npm run … -w @video-meetings/api` invocations (e.g. the Playwright webServer). The API's **jest** configs keep resolving shared from source via a `moduleNameMapper` (ts-jest transforms it), so `npm run test` needs no prior build. When editing shared, edit `packages/shared/src/…`; the compile is automatic in every wired path. Beyond types, it holds framework-agnostic constants and pure logic shared by both apps — e.g. `avatar-palette.ts`, the set of default-avatar colour solutions (each with a stable `name` plus light/dark variants), which the backend picks from by name and the frontend maps back to colours, and `avatar-initial.ts` (`avatarInitial(name, email)`), which derives the single letter shown on a default avatar (first letter of the name skipping non-letters, else the email, else a neutral sign; any alphabet). The package has its own jest/ts-jest unit tests (`*.spec.ts`, run by `npm run test`, resolved from source) so that shared logic can be tested at the source of truth.
-- **TypeScript config layering**: `tsconfig.base.json` at the root sets strict-mode defaults (`strict`, `ES2022` target, declaration output). Each workspace's `tsconfig.json` extends it and overrides `module`/`moduleResolution` for its runtime (NestJS uses CommonJS/node resolution; Next.js uses ESNext/bundler resolution).
-- **ESLint config layering**: the root `.eslintrc.js` defines base `@typescript-eslint` rules. `apps/api/.eslintrc.js` and `apps/web/.eslintrc.js` each set `root: true` and extend/override with framework-specific plugins (NestJS + Prettier integration in `api`; `next/core-web-vitals` + `next/typescript` in `web`) rather than inheriting the root config directly.
-- **Single Prettier config**: `.prettierrc` at the root applies repo-wide; there is no per-app Prettier config.
-- **Local Postgres via Docker Compose**: `docker-compose.yml` at the root runs a single `postgres:18-alpine` service (container `video-meetings-postgres`, port `5432` by default). Config is read from `POSTGRES_USER`/`POSTGRES_PASSWORD`/`POSTGRES_DB`/`POSTGRES_PORT` env vars (see `.env.example`). `POSTGRES_USER`/`POSTGRES_DB`/`POSTGRES_PORT` default to `postgres`/`video_meetings`/`5432`; `POSTGRES_PASSWORD` has **no default** and must be set in `.env` (`docker compose` fails fast via `${POSTGRES_PASSWORD:?…}` if unset) — so no password value lives in the tracked `docker-compose.yml`. Data persists in the named volume `postgres_data`. Note: Postgres 18+ images require the volume to be mounted at `/var/lib/postgresql` (not `/var/lib/postgresql/data`) — mounting at the old path causes the container to crash-loop on startup. `apps/api` now connects to it via Prisma (`@prisma/client`/`prisma` pinned to `^6.19.2`, see `apps/api/CLAUDE.md` for the pin rationale) — `User`, `Meeting` and `MeetingFile` tables exist (`apps/api/prisma/schema.prisma`, related 1-to-many with `onDelete: Cascade`), with migrations in `apps/api/prisma/migrations`. Consumers: the **Users** module owns the `User` table (create + lookup via CQRS command/query handlers, plus the JWT-protected profile route `GET /users/me`), the **Auth** module handles register/login (`POST /auth/register`, `POST /auth/login`) and reaches Users over the CQRS bus rather than touching `prisma.user` itself, and the **meetings** module (JWT-protected: `POST`/`GET /meetings`, `GET`/`PATCH`/`DELETE /meetings/:id`) owns the `Meeting` and `MeetingFile` tables. Uploaded meeting files are the one piece of state that does **not** live in Postgres: `POST /meetings/:meetingId/files` writes the bytes to a directory on disk (`UPLOAD_DIR`, default `apps/api/uploads`, git-ignored) and only the metadata to `MeetingFile`, with `GET /meetings/:meetingId/files` and `GET /meetings/:meetingId/files/:fileId` reading them back (uploads are capped at 100 MB and limited to mp3/wav/m4a/mp4) — so a deployment must treat that directory as persistent storage, and in Docker it has to be a mounted volume. **Deletion is the only thing that reclaims that space**: `DELETE /meetings/:meetingId/files/:fileId` and `DELETE /meetings/:id` remove the rows _and_ the bytes, in that order, so a failure between the two costs disk rather than leaving rows pointing at files that are gone. The `onDelete: Cascade` on `MeetingFile` covers only the rows — nothing in Postgres knows about the directory, which is why the delete handlers read the file names before the cascade takes them.
+- **Workspaces**: npm workspaces (`apps/*`, `packages/*`), single root `node_modules`, `@video-meetings/shared` symlinked into each app.
+- **Task graph** (`turbo.json`): `build`/`lint`/`test`/`dev` all `dependsOn: ["^build"]`, so `packages/shared` compiles before dependent apps run. `dev` is uncached and persistent.
+- **Shared package** (`packages/shared`) **is compiled** (`build` = `tsc` → `dist/` JS + `.d.ts`; `main`/`types` point at `dist/`) because it carries **runtime** code the API imports, and the API runs as plain Node which cannot `require` raw `.ts`. Resolution differs per consumer, on purpose: **web** resolves it to TS **source** (tsconfig path alias + `transpilePackages`) so edits need no rebuild; **api** resolves compiled **`dist/`** at runtime, so shared must be built first (covered by turbo `^build` and by api's `predev`/`prebuild`/`prestart`; api's jest resolves source via `moduleNameMapper`). **Edit `packages/shared/src/…`** — the compile is automatic in every wired path. Beyond types it holds pure logic used by both apps (e.g. `avatar-palette.ts`, `avatar-initial.ts`) and has its own jest unit tests.
+- **TypeScript**: `tsconfig.base.json` sets strict-mode defaults (`strict`, `ES2022`, declaration output); each workspace's `tsconfig.json` extends it and overrides `module`/`moduleResolution` for its runtime.
+- **ESLint**: root `.eslintrc.js` has base `@typescript-eslint` rules; `apps/*/.eslintrc.js` set `root: true` and layer framework plugins (api: NestJS + Prettier; web: `next/core-web-vitals` + `next/typescript`).
+- **Prettier**: single root `.prettierrc`, repo-wide.
+
+### Data & storage
+
+- **Postgres via Docker Compose** (`docker-compose.yml`, `npm run db:up`): one `postgres:18-alpine` service, port 5432. Config from `POSTGRES_USER`/`PASSWORD`/`DB`/`PORT` env vars; `POSTGRES_PASSWORD` has **no default** (compose fails fast if unset — no password in the tracked file). Data in named volume `postgres_data`. Note: PG 18+ needs the volume mounted at `/var/lib/postgresql` (not `/data`) or it crash-loops.
+- **Prisma** (`^6.19.2`, pinned — see `apps/api/CLAUDE.md`): `User`, `Meeting`, `MeetingFile` tables (`apps/api/prisma/schema.prisma`, 1-to-many with `onDelete: Cascade`). Owners: **Users** module owns `User`, **Auth** does register/login (reaches Users over the CQRS bus), **meetings** owns `Meeting`/`MeetingFile`. Routes are documented in `apps/api/CLAUDE.md`.
+- **Uploaded files are the only state not in Postgres**: bytes go to `UPLOAD_DIR` (default `apps/api/uploads`, git-ignored), metadata to `MeetingFile`. Uploads capped at 100 MB, mp3/wav/m4a/mp4 only. **A deployment must treat that directory as persistent storage** (mounted volume in Docker). Deletion removes rows **then** bytes (in that order) — the cascade covers only rows, nothing in Postgres knows about the directory.
+
+## Working efficiently (minimize context)
+
+Prefer extracting only what you need over pulling whole files or full command output into context.
+
+| Default (wasteful)                            | Do this instead                             | Saving      |
+| --------------------------------------------- | ------------------------------------------- | ----------- |
+| Read an entire file (e.g. `users.service.ts`) | `grep`/Grep for the specific lines/symbol   | up to ~90%  |
+| Read the whole `package.json`                 | Pull only the one script you need           | up to ~70%  |
+| Read the whole `schema.prisma`                | Grep for just the model in question         | substantial |
+| List all GitHub issues in full                | Fetch only number + title (`gh issue list`) | substantial |
+
+Trim tool output at the source:
+
+- **Tests**: `npm test -- --silent` when you only need pass/fail; run by pattern (`npx jest <file>` / `-t 'name'`), not the whole suite.
+- **Git diff**: keep it compact (`git diff --stat` for the shape, `--unified=0` when you only need changed lines).
+- **Git log**: `git log --oneline -10`, not the verbose log, unless details are needed.
+- **TypeScript** (`tsc --noEmit`): read the tail of the output (the errors), not the full run.
 
 ## Secrets & environment variables
 
-Never commit real secrets, keys, or credentials to this repository.
+**This is the canonical secrets policy for the repo.** Never commit real secrets, keys, or credentials.
 
-- **Real config lives in `.env` files, which are git-ignored.** Each app reads its own `.env` (`apps/api/.env`, `apps/web/.env`) and the root `.env` feeds `docker-compose.yml`. The root `.gitignore` ignores every `.env`/`.env.*` plus common key/cert/credential patterns (`*.pem`, `*.key`, `*.p12`, `*.crt`, `service-account*.json`, etc.). Do not remove those rules or `git add -f` a real `.env`.
-- **Only `*.example` templates are tracked.** `.env.example`, `apps/api/.env.example`, and `apps/web/.env.example` document every required variable with **placeholder** values (e.g. `JWT_SECRET=change-me-in-production`, `POSTGRES_PASSWORD=change-me`) — never real ones. When you add or rename an env var, update the matching `.example` in the same change so setup stays reproducible.
-- **`NEXT_PUBLIC_*` variables are public.** Next.js inlines them into the client bundle — never put a secret behind that prefix. Server-only secrets (`JWT_SECRET`, `DATABASE_URL`) stay in `apps/api/.env` and are read only on the server.
-- **In production, inject secrets from the environment / a secret manager** (the platform's env config, Docker/Kubernetes secrets, a vault) rather than a checked-in file, and use a strong, unique `JWT_SECRET`. If a secret is ever committed or exposed, rotate it and purge it from history — ignoring it after the fact is not enough, since git retains it.
+- Real config lives in git-ignored `.env` files (`apps/api/.env`, `apps/web/.env`, root `.env` for compose). The root `.gitignore` covers every `.env`/`.env.*` plus key/cert patterns — don't remove those rules or `git add -f` a real `.env`.
+- Only `*.example` templates are tracked, with **placeholder** values. When you add/rename an env var, update the matching `.example` in the same change.
+- `NEXT_PUBLIC_*` variables are inlined into the client bundle — never put a secret behind that prefix. Server-only secrets (`JWT_SECRET`, `DATABASE_URL`) stay in `apps/api/.env`.
+- In production, inject secrets from the environment / a secret manager, not a checked-in file. If a secret is ever exposed, rotate **and** purge it from history.
 
 ## Design docs
 
-`docs/superpowers/specs/2026-07-14-monorepo-design.md` and `docs/superpowers/plans/2026-07-14-monorepo-setup.md` capture the original scaffolding design and rationale (e.g., why the API runs on port 3001, why `shared` was originally source-consumed with no compiled output — **now superseded**: `shared` is compiled, see the "Shared package" bullet in Architecture, because the API imports runtime code from it and runs on plain Node). Explicitly out of scope per the design doc at the time it was written: database/ORM, authentication/JWT guards, CI/CD. A standalone Postgres via Docker Compose was since added (see Architecture above), and `docs/superpowers/specs/2026-07-14-auth-login-register-design.md` captures the design for the auth module (`apps/api/src/auth/`) that now consumes it.
+`docs/superpowers/specs/2026-07-14-monorepo-design.md` and `docs/superpowers/plans/2026-07-14-monorepo-setup.md` capture the original scaffolding. **Historical / partly superseded**: they describe `shared` as source-consumed with no build — see the Shared package bullet above for the current (compiled) reality. Database/ORM, auth/JWT, and CI/CD were out of scope there; Postgres and the auth module (`docs/superpowers/specs/2026-07-14-auth-login-register-design.md`) were added since.
 
 ## Keeping documentation current
 
-When a change alters the project's architecture — new workspace/app, new shared package, changed task graph in `turbo.json`, changed port/build/module-resolution conventions, or a decision that supersedes something in `docs/superpowers/` — update this file (and the affected `apps/*/CLAUDE.md`) in the same change. Do not let `CLAUDE.md` drift from what the code actually does.
+When a change alters architecture — new workspace/app, changed task graph, changed port/build/module-resolution conventions, or a decision that supersedes `docs/superpowers/` — update this file (and the affected `apps/*/CLAUDE.md`) in the same change.
