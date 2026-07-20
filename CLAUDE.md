@@ -38,21 +38,7 @@ Scripts are defined in the root `package.json` (run via Turborepo — fans out t
 
 ## Working efficiently (minimize context)
 
-Prefer extracting only what you need over pulling whole files or full command output into context.
-
-| Default (wasteful)                            | Do this instead                             | Saving      |
-| --------------------------------------------- | ------------------------------------------- | ----------- |
-| Read an entire file (e.g. `users.service.ts`) | `grep`/Grep for the specific lines/symbol   | up to ~90%  |
-| Read the whole `package.json`                 | Pull only the one script you need           | up to ~70%  |
-| Read the whole `schema.prisma`                | Grep for just the model in question         | substantial |
-| List all GitHub issues in full                | Fetch only number + title (`gh issue list`) | substantial |
-
-Trim tool output at the source:
-
-- **Tests**: `npm test -- --silent` when you only need pass/fail; run by pattern (`npx jest <file>` / `-t 'name'`), not the whole suite.
-- **Git diff**: keep it compact (`git diff --stat` for the shape, `--unified=0` when you only need changed lines).
-- **Git log**: `git log --oneline -10`, not the verbose log, unless details are needed.
-- **TypeScript** (`tsc --noEmit`): read the tail of the output (the errors), not the full run.
+Extract only what you need — grep for the specific lines/model/script rather than reading whole files, and trim tool output at the source (`git diff --stat`, `git log --oneline`, tests by pattern, read the tail of `tsc`/lint runs). Repo-specific hooks: `npm run test` is scoped per workspace (`-w`) and by pattern (`npx jest <file>`); prefer `gh issue list --json number,title` over full issue bodies.
 
 ## Secrets & environment variables
 
@@ -66,6 +52,21 @@ Trim tool output at the source:
 ## Design docs
 
 `docs/superpowers/specs/2026-07-14-monorepo-design.md` and `docs/superpowers/plans/2026-07-14-monorepo-setup.md` capture the original scaffolding. **Historical / partly superseded**: they describe `shared` as source-consumed with no build — see the Shared package bullet above for the current (compiled) reality. Database/ORM, auth/JWT, and CI/CD were out of scope there; Postgres and the auth module (`docs/superpowers/specs/2026-07-14-auth-login-register-design.md`) were added since.
+
+## CLAUDE.md hierarchy
+
+The repo has a root `CLAUDE.md` and one per app (`apps/api/CLAUDE.md`, `apps/web/CLAUDE.md`). Each level owns a distinct scope:
+
+- **Root** — monorepo-wide facts and the canonical version of anything cross-cutting: workspace layout, task graph, shared-package resolution, secrets policy, the data/storage model, and the context-efficiency rules above. This is the single source for cross-workspace concerns.
+- **`apps/*/CLAUDE.md`** — that app's own detail only: its routes, modules, components, build/test config. It must **not** restate a root fact — link to the root section instead (e.g. "see root `CLAUDE.md` → Shared package").
+- Nested `CLAUDE.md`: `apps/api/src/<module>/` and `apps/web/src/{app,components,lib}` + `apps/web/e2e/` each own their detail in a nested file, loaded into context only when you work there.
+
+Rules that keep them from drifting:
+
+- **A new backend module (`apps/api/src/<module>/`) or a new top-level frontend layer MUST get its own nested `CLAUDE.md` in the same change, plus a one-line pointer in the parent** — don't grow the parent file with the new module's detail. (A non-blocking hook, `.claude/hooks/check-module-docs.sh`, warns when a backend module directory has no `CLAUDE.md`.)
+- **A fact lives in exactly one file.** Cross-workspace → root, and app files reference it; app-local → that app/module file, and the parent at most names it (with a pointer).
+- **When two files would both need it, put it in the higher file and link — never copy.** Copies drift; this repo has already hit that (duplicated shared-resolution / route lists).
+- Every nested file links **back** to its parent; each parent links **out** to its children. Keep that two-way navigation intact.
 
 ## Keeping documentation current
 
