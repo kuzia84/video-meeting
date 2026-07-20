@@ -11,6 +11,15 @@
             "command": "node .claude/hooks/stop.js"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/check-module-docs.sh",
+            "statusMessage": "Checking module CLAUDE.md coverage..."
+          }
+        ]
       }
     ],
     "PostToolUse": [
