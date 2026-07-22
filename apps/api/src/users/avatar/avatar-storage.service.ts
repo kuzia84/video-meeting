@@ -1,6 +1,6 @@
 import { createReadStream, mkdirSync, ReadStream } from 'node:fs';
 import { open, unlink } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { UPLOAD_DIR } from '../../storage/storage.constants';
 import {
@@ -49,7 +49,12 @@ export class AvatarStorage {
   }
 
   private pathFor(storedName: string): string {
-    return join(this.dir, storedName);
+    const resolved = join(this.dir, storedName);
+    const prefix = this.dir.endsWith(sep) ? this.dir : this.dir + sep;
+    if (!resolved.startsWith(prefix)) {
+      throw new Error('Path traversal detected');
+    }
+    return resolved;
   }
 
   /**

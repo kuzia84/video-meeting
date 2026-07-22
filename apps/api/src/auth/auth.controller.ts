@@ -1,5 +1,6 @@
 import { Body, Controller, HttpCode, Post, UseGuards } from '@nestjs/common';
 import { CommandBus } from '@nestjs/cqrs';
+import { Throttle } from '@nestjs/throttler';
 import type { ApiResponse } from '@video-meetings/shared';
 import { AuthUser } from './auth.types';
 import { AuthResult } from './auth.types';
@@ -17,6 +18,7 @@ export class AuthController {
   constructor(private readonly commandBus: CommandBus) {}
 
   @Post('register')
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
   async register(@Body() dto: RegisterUserDto): Promise<ApiResponse<AuthResult>> {
     const result = await this.commandBus.execute<RegisterCommand, AuthResult>(
       new RegisterCommand(dto.email, dto.password),
@@ -26,6 +28,7 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(200)
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
   async login(@Body() dto: LoginDto): Promise<ApiResponse<AuthResult>> {
     const result = await this.commandBus.execute<LoginCommand, AuthResult>(
       new LoginCommand(dto.email, dto.password),

@@ -1,9 +1,12 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  app.use(helmet());
 
   // Restrict CORS to an explicit allowlist rather than reflecting every
   // origin. Configure via CORS_ORIGINS (comma-separated); defaults to the

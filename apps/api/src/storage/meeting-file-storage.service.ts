@@ -1,6 +1,6 @@
 import { createReadStream, ReadStream } from 'node:fs';
 import { stat, unlink } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { UPLOAD_DIR } from './storage.constants';
 
@@ -10,7 +10,12 @@ export class MeetingFileStorage {
   constructor(@Inject(UPLOAD_DIR) private readonly uploadDir: string) {}
 
   private pathFor(storedName: string): string {
-    return join(this.uploadDir, storedName);
+    const resolved = join(this.uploadDir, storedName);
+    const prefix = this.uploadDir.endsWith(sep) ? this.uploadDir : this.uploadDir + sep;
+    if (!resolved.startsWith(prefix)) {
+      throw new Error('Path traversal detected');
+    }
+    return resolved;
   }
 
   /**
